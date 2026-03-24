@@ -331,16 +331,16 @@
         /* Video Grid */
         .video-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 16px;
-            margin-top: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+            gap: 10px;
+            margin-top: 16px;
         }
         
         .video-card {
             position: relative;
             background: var(--color-surface);
             border: 1px solid var(--color-border);
-            border-radius: var(--radius-lg);
+            border-radius: var(--radius-md);
             overflow: hidden;
             cursor: pointer;
             transition: border-color var(--transition-fast), box-shadow var(--transition-normal);
@@ -363,21 +363,21 @@
         
         .video-thumbnail {
             width: 100%;
-            height: 146px;
+            height: 98px;
             object-fit: cover;
             background: var(--color-surface-muted);
         }
         
         .video-info {
-            padding: 12px;
+            padding: 8px;
         }
         
         .video-title {
             font-weight: 600;
-            font-size: 0.8125rem;
+            font-size: 0.75rem;
             line-height: 1.4;
             color: var(--color-text);
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
@@ -385,7 +385,7 @@
         }
         
         .video-meta {
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             color: var(--color-text-muted);
             display: flex;
             justify-content: space-between;
@@ -674,13 +674,21 @@
                     <div class="step-number">2</div>
                     <div class="step-title">Select Videos</div>
                 </div>
-                <div class="selection-controls">
-                    <button class="btn btn-small btn-primary" onclick="selectAll()">Select All</button>
-                    <button class="btn btn-small btn-primary" onclick="selectNone()">Select None</button>
-                    <button class="btn btn-small btn-primary" onclick="selectTop(10)">Top 10</button>
-                    <button class="btn btn-small btn-primary" onclick="selectTop(5)">Top 5</button>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <div class="selection-controls" style="margin:0;">
+                        <button class="btn btn-small btn-primary" onclick="selectAll()">Select All</button>
+                        <button class="btn btn-small btn-primary" onclick="selectNone()">Select None</button>
+                        <button class="btn btn-small btn-primary" onclick="selectTop(10)">Top 10</button>
+                        <button class="btn btn-small btn-primary" onclick="selectTop(5)">Top 5</button>
+                    </div>
+                    <span id="videoCountDisplay" style="font-size:0.8125rem;color:var(--color-text-muted);"></span>
                 </div>
                 <div class="video-grid" id="videoGrid"></div>
+                <div id="videoGridSentinel" style="height:1px;"></div>
+                <div id="loadMoreIndicator" style="display:none;align-items:center;justify-content:center;padding:12px;gap:8px;">
+                    <div class="loading-spinner"></div>
+                    <span style="font-size:0.8125rem;color:var(--color-text-muted);">Loading more videos...</span>
+                </div>
                 <div style="margin-top:20px">
                     <button class="btn btn-cta" id="extractBtn" disabled onclick="extractTranscripts()">
                         <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -725,6 +733,13 @@ let discoveredVideos = [];
 let selectedVideos = new Set();
 let extractedResults = [];
 
+// Infinite scroll state
+let currentContinuationToken = null;
+let currentDateFilter = 'all_time';
+let hasMoreVideos = false;
+let isLoadingMore = false;
+let sentinelObserver = null;
+
 async function analyzeChannel() {
     const url = document.getElementById('channelUrl').value.trim();
     const dateFilter = document.getElementById('dateFilter').value;
@@ -743,12 +758,16 @@ async function analyzeChannel() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Analysis failed');
 
-        discoveredVideos = data.videos;
+        discoveredVideos = data.videos || [];
+        currentContinuationToken = data.continuation_token || null;
+        currentDateFilter = dateFilter;
+        hasMoreVideos = data.has_more || false;
+
         hideProgress('analysisProgress');
 
         if (!discoveredVideos.length) { showAlert('No videos found', 'error'); return; }
 
-        showAlert('Found ' + discoveredVideos.length + ' videos!', 'success');
+        showAlert('Found videos!', 'success');
         populateVideoGrid(discoveredVideos);
         activateStep(2);
     } catch (e) {
@@ -759,25 +778,100 @@ async function analyzeChannel() {
     }
 }
 
+function createVideoCard(v) {
+    const card = document.createElement('div');
+    card.className = 'video-card';
+    card.id = 'card_' + v.videoId;
+    card.onclick = function(e) { if (e.target.tagName !== 'INPUT') toggleVideoSelection(v.videoId); };
+    card.innerHTML =
+        '<div class="checkbox-container">' +
+            '<input type="checkbox" id="cb_' + v.videoId + '" onchange="toggleVideoSelection(\'' + v.videoId + '\')">' +
+        '</div>' +
+        '<img src="' + v.thumbnail + '" alt="" class="video-thumbnail" onerror="this.style.display=\'none\'">' +
+        '<div class="video-info">' +
+            '<div class="video-title">' + escapeHtml(v.title) + '</div>' +
+            '<div class="video-meta"><span>' + v.duration + '</span><span>' + v.views + '</span></div>' +
+        '</div>';
+    return card;
+}
+
+function appendVideoCards(videos) {
+    const grid = document.getElementById('videoGrid');
+    videos.forEach(function(v) { grid.appendChild(createVideoCard(v)); });
+}
+
 function populateVideoGrid(videos) {
     const grid = document.getElementById('videoGrid');
     grid.innerHTML = '';
-    videos.forEach(function(v) {
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.id = 'card_' + v.videoId;
-        card.onclick = function(e) { if (e.target.tagName !== 'INPUT') toggleVideoSelection(v.videoId); };
-        card.innerHTML =
-            '<div class="checkbox-container">' +
-                '<input type="checkbox" id="cb_' + v.videoId + '" onchange="toggleVideoSelection(\'' + v.videoId + '\')">' +
-            '</div>' +
-            '<img src="' + v.thumbnail + '" alt="" class="video-thumbnail" onerror="this.style.display=\'none\'">' +
-            '<div class="video-info">' +
-                '<div class="video-title">' + escapeHtml(v.title) + '</div>' +
-                '<div class="video-meta"><span>' + v.duration + '</span><span>' + v.views + '</span></div>' +
-            '</div>';
-        grid.appendChild(card);
-    });
+    videos.forEach(function(v) { grid.appendChild(createVideoCard(v)); });
+
+    var countDisplay = document.getElementById('videoCountDisplay');
+    if (countDisplay) {
+        countDisplay.textContent = hasMoreVideos
+            ? 'Showing ' + videos.length + ' videos, scroll for more'
+            : videos.length + ' video' + (videos.length !== 1 ? 's' : '');
+    }
+
+    setupInfiniteScroll();
+}
+
+function setupInfiniteScroll() {
+    if (sentinelObserver) sentinelObserver.disconnect();
+
+    var sentinel = document.getElementById('videoGridSentinel');
+    if (!sentinel) return;
+
+    sentinelObserver = new IntersectionObserver(function(entries) {
+        if (entries[0].isIntersecting && hasMoreVideos && !isLoadingMore) {
+            loadMoreVideos();
+        }
+    }, { rootMargin: '200px' });
+
+    sentinelObserver.observe(sentinel);
+}
+
+async function loadMoreVideos() {
+    if (isLoadingMore || !hasMoreVideos || !currentContinuationToken) return;
+
+    isLoadingMore = true;
+    var indicator = document.getElementById('loadMoreIndicator');
+    if (indicator) indicator.style.display = 'flex';
+
+    try {
+        var res = await fetch('/api/load_more_videos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                continuation_token: currentContinuationToken,
+                date_filter: currentDateFilter,
+            })
+        });
+        var data = await res.json();
+
+        if (data.videos && data.videos.length > 0) {
+            appendVideoCards(data.videos);
+            discoveredVideos = discoveredVideos.concat(data.videos);
+            currentContinuationToken = data.continuation_token || null;
+            hasMoreVideos = data.has_more || false;
+
+            var countDisplay = document.getElementById('videoCountDisplay');
+            if (countDisplay) {
+                countDisplay.textContent = hasMoreVideos
+                    ? 'Showing ' + discoveredVideos.length + ' videos, scroll for more'
+                    : discoveredVideos.length + ' video' + (discoveredVideos.length !== 1 ? 's' : '');
+            }
+        } else {
+            hasMoreVideos = false;
+        }
+
+        if (!hasMoreVideos && sentinelObserver) sentinelObserver.disconnect();
+    } catch (e) {
+        console.error('Error loading more videos:', e);
+    } finally {
+        isLoadingMore = false;
+        var indicator = document.getElementById('loadMoreIndicator');
+        if (indicator) indicator.style.display = 'none';
+    }
 }
 
 function toggleVideoSelection(id) {

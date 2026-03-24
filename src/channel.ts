@@ -10,6 +10,20 @@ export interface Video {
   publishedTimeText: string;
 }
 
+export interface ChannelPage {
+  videos: Video[];
+  continuationToken?: string;
+  hasMore: boolean;
+  dateFilter: string;
+}
+
+const BROWSE_API = 'https://www.youtube.com/youtubei/v1/browse?prettyPrint=false';
+const YT_CLIENT_CONTEXT = {
+  context: {
+    client: { hl: 'en', gl: 'US', clientName: 'WEB', clientVersion: '2.20240919.01.00' },
+  },
+};
+
 function parseRelativeDate(text: string): Date | null {
   const m = text.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);
   if (!m) return null;
@@ -56,7 +70,7 @@ function passesDateFilter(publishedTimeText: string, filter: string): boolean {
 export async function analyzeChannel(
   channelUrl: string,
   dateFilter: string,
-): Promise<Video[]> {
+): Promise<ChannelPage> {
   let videosUrl = channelUrl.replace(/\/+$/, '');
   if (!videosUrl.endsWith('/videos')) videosUrl += '/videos';
 
@@ -72,7 +86,69 @@ export async function analyzeChannel(
 
   const filtered = videos.filter((v) => passesDateFilter(v.publishedTimeText, dateFilter));
   if (!filtered.length) throw new Error('No videos found for the selected date range');
-  return filtered;
+
+  const continuationToken = extractContinuationToken(data) ?? undefined;
+
+  return {
+    videos: filtered,
+    continuationToken,
+    hasMore: !!continuationToken,
+    dateFilter,
+  };
+}
+
+export async function fetchNextPage(
+  continuationToken: string,
+  dateFilter: string,
+): Promise<ChannelPage> {
+  const res = await fetch(BROWSE_API, {
+    method: 'POST',
+    headers: { ...YT_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...YT_CLIENT_CONTEXT, continuation: continuationToken }),
+  });
+  if (!res.ok) throw new Error(`YouTube browse API returned HTTP ${res.status}`);
+
+  const data: any = await res.json();
+
+  const videos: Video[] = [];
+  const continuationItems =
+    data?.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems;
+  if (Array.isArray(continuationItems)) {
+    for (const item of continuationItems) collectVideos(item, videos, 500);
+  } else {
+    collectVideos(data, videos, 500);
+  }
+
+  const filtered = videos.filter((v) => passesDateFilter(v.publishedTimeText, dateFilter));
+
+  const nextToken = extractContinuationToken(data) ?? undefined;
+
+  return {
+    videos: filtered,
+    continuationToken: nextToken,
+    hasMore: !!nextToken,
+    dateFilter,
+  };
+}
+
+function extractContinuationToken(obj: any): string | null {
+  if (!obj || typeof obj !== 'object') return null;
+  const token =
+    obj.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+  if (token) return token;
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        const t = extractContinuationToken(item);
+        if (t) return t;
+      }
+    } else if (typeof val === 'object') {
+      const t = extractContinuationToken(val);
+      if (t) return t;
+    }
+  }
+  return null;
 }
 
 function collectVideos(obj: any, videos: Video[], max: number): void {

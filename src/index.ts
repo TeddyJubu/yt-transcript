@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { analyzeChannel } from './channel';
+import { analyzeChannel, fetchNextPage } from './channel';
 import { extractTranscript, extractVideoId } from './transcript';
 import { summarizeWithGemini } from './gemini';
 
@@ -13,8 +13,28 @@ app.post('/api/analyze_channel', async (c) => {
   if (!channel_url) return c.json({ error: 'Channel URL is required' }, 400);
 
   try {
-    const videos = await analyzeChannel(channel_url, date_filter);
-    return c.json({ videos });
+    const page = await analyzeChannel(channel_url, date_filter);
+    return c.json({
+      videos: page.videos,
+      continuation_token: page.continuationToken ?? null,
+      has_more: page.hasMore,
+    });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+app.post('/api/load_more_videos', async (c) => {
+  const { continuation_token, date_filter = 'all_time' } = await c.req.json();
+  if (!continuation_token) return c.json({ error: 'continuation_token is required' }, 400);
+
+  try {
+    const page = await fetchNextPage(continuation_token, date_filter);
+    return c.json({
+      videos: page.videos,
+      continuation_token: page.continuationToken ?? null,
+      has_more: page.hasMore,
+    });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }
