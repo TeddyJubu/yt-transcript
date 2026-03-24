@@ -22,7 +22,7 @@ from pathlib import Path
 
 # Import our existing transcript extraction modules
 import sys
-sys.path.append('../transcript_toolkit')
+sys.path.insert(0, 'transcript_toolkit')
 from youtube_transcript_extractor import YouTubeTranscriptExtractor
 from youtube_channel_analyzer import YouTubeChannelAnalyzer
 
@@ -88,6 +88,8 @@ def analyze_channel():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+FIRST_PAGE_SIZE = 30
+
 def analyze_channel_background(job_id, channel_url, max_videos):
     """Background task for channel analysis"""
     try:
@@ -96,48 +98,85 @@ def analyze_channel_background(job_id, channel_url, max_videos):
             'progress': 0,
             'message': 'Analyzing channel...',
             'videos': [],
+            'all_videos': [],
             'error': None
         }
-        
-        # Emit progress update
+
         socketio.emit('progress_update', {
             'job_id': job_id,
             'status': 'analyzing',
             'progress': 10,
             'message': 'Discovering videos...'
         })
-        
-        # Initialize analyzer
+
         analyzer = YouTubeChannelAnalyzer()
-        
-        # Get channel videos
-        videos = analyzer.get_channel_videos(channel_url, max_videos)
-        
+
+        # Fetch all video metadata at once using yt-dlp flat extraction
+        all_videos = analyzer.get_all_channel_videos_flat(channel_url)
+
+        first_page = all_videos[:FIRST_PAGE_SIZE]
+        total = len(all_videos)
+        has_more = total > FIRST_PAGE_SIZE
+
         processing_jobs[job_id].update({
             'status': 'completed',
             'progress': 100,
-            'message': f'Found {len(videos)} videos',
-            'videos': videos
+            'message': f'Found {total} videos',
+            'videos': first_page,
+            'all_videos': all_videos,
+            'total_videos': total,
         })
-        
+
         socketio.emit('analysis_complete', {
             'job_id': job_id,
-            'videos': videos
+            'videos': first_page,
+            'total': total,
+            'has_more': has_more,
         })
-        
+
     except Exception as e:
         processing_jobs[job_id] = {
             'status': 'error',
             'progress': 0,
             'message': f'Error: {str(e)}',
             'videos': [],
+            'all_videos': [],
             'error': str(e)
         }
-        
+
         socketio.emit('analysis_error', {
             'job_id': job_id,
             'error': str(e)
         })
+
+@app.route('/api/load_more_videos', methods=['POST'])
+def load_more_videos():
+    """Return the next page of videos from a cached analysis job"""
+    try:
+        data = request.json
+        job_id = data.get('job_id')
+        offset = int(data.get('offset', 0))
+        limit = int(data.get('limit', FIRST_PAGE_SIZE))
+
+        if not job_id or job_id not in processing_jobs:
+            return jsonify({'error': 'Job not found'}), 404
+
+        job = processing_jobs[job_id]
+        all_videos = job.get('all_videos', [])
+
+        page_videos = all_videos[offset:offset + limit]
+        has_more = (offset + limit) < len(all_videos)
+
+        return jsonify({
+            'videos': page_videos,
+            'has_more': has_more,
+            'offset': offset,
+            'total': len(all_videos),
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/extract_transcripts', methods=['POST'])
 def extract_transcripts():

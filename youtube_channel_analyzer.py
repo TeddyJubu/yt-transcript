@@ -13,6 +13,7 @@ import json
 import time
 from datetime import datetime
 from typing import List, Dict, Optional
+import yt_dlp
 
 class YouTubeChannelAnalyzer:
     """Analyzes YouTube channels and extracts video information"""
@@ -39,6 +40,87 @@ class YouTubeChannelAnalyzer:
         
         return None
     
+    def get_all_channel_videos_flat(self, channel_url: str, max_videos: int = 500) -> List[Dict]:
+        """Fetch all channel videos using yt-dlp flat extraction (fast, no per-video requests)"""
+        try:
+            videos_url = channel_url.rstrip('/') + '/videos'
+
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': 'in_playlist',
+                'ignoreerrors': True,
+                'playlistend': max_videos,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(videos_url, download=False)
+
+            if not info:
+                return self.get_sample_videos(30)
+
+            entries = info.get('entries', []) or []
+            videos = []
+
+            for entry in entries:
+                if not entry:
+                    continue
+                video_id = entry.get('id', '')
+                if not video_id:
+                    continue
+
+                duration = entry.get('duration')
+                views = entry.get('view_count')
+                upload_date = entry.get('upload_date', '')
+
+                videos.append({
+                    'video_id': video_id,
+                    'title': entry.get('title', f'Video {video_id}'),
+                    'url': f'https://www.youtube.com/watch?v={video_id}',
+                    'thumbnail': f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg',
+                    'duration': self._format_duration(duration) if duration else 'Unknown',
+                    'views': self._format_views(views) if views else 'Unknown',
+                    'upload_date': self._format_date(upload_date) if upload_date else 'Unknown',
+                })
+
+            return videos if videos else self.get_sample_videos(30)
+
+        except Exception as e:
+            print(f"Error getting channel videos with yt-dlp: {e}")
+            return self.get_sample_videos(30)
+
+    def _format_duration(self, seconds) -> str:
+        try:
+            seconds = int(seconds)
+            h = seconds // 3600
+            m = (seconds % 3600) // 60
+            s = seconds % 60
+            if h > 0:
+                return f"{h}:{m:02d}:{s:02d}"
+            return f"{m}:{s:02d}"
+        except Exception:
+            return 'Unknown'
+
+    def _format_views(self, count) -> str:
+        try:
+            count = int(count)
+            if count >= 1_000_000:
+                return f"{count / 1_000_000:.1f}M views"
+            elif count >= 1_000:
+                return f"{count / 1_000:.0f}K views"
+            return f"{count} views"
+        except Exception:
+            return 'Unknown'
+
+    def _format_date(self, date_str: str) -> str:
+        try:
+            if len(date_str) == 8:
+                dt = datetime.strptime(date_str, '%Y%m%d')
+                return dt.strftime('%b %d, %Y')
+            return date_str
+        except Exception:
+            return date_str
+
     def get_channel_videos(self, channel_url: str, max_videos: int = 50) -> List[Dict]:
         """Get videos from a YouTube channel"""
         try:

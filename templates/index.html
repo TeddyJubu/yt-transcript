@@ -344,16 +344,16 @@
         /* Video Grid */
         .video-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 16px;
-            margin-top: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+            gap: 10px;
+            margin-top: 16px;
         }
         
         .video-card {
             position: relative;
             background: var(--color-surface);
             border: 1px solid var(--color-border);
-            border-radius: var(--radius-lg);
+            border-radius: var(--radius-md);
             overflow: hidden;
             cursor: pointer;
             transition: border-color var(--transition-fast), box-shadow var(--transition-normal);
@@ -376,21 +376,21 @@
         
         .video-thumbnail {
             width: 100%;
-            height: 146px;
+            height: 98px;
             object-fit: cover;
             background: var(--color-surface-muted);
         }
         
         .video-info {
-            padding: 12px;
+            padding: 8px;
         }
         
         .video-title {
             font-weight: 600;
-            font-size: 0.8125rem;
+            font-size: 0.75rem;
             line-height: 1.4;
             color: var(--color-text);
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
@@ -398,7 +398,7 @@
         }
         
         .video-meta {
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             color: var(--color-text-muted);
             display: flex;
             justify-content: space-between;
@@ -425,7 +425,7 @@
 
         /* Selection Controls */
         .selection-controls {
-            margin: 20px 0;
+            margin: 16px 0;
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
@@ -627,14 +627,22 @@
                     <div class="step-number">2</div>
                     <div class="step-title">Select Videos</div>
                 </div>
-                <div class="selection-controls">
-                    <button class="btn btn-small btn-outline" onclick="selectAll()">Select All</button>
-                    <button class="btn btn-small btn-outline" onclick="selectNone()">Select None</button>
-                    <button class="btn btn-small btn-outline" onclick="selectTop(10)">Top 10</button>
-                    <button class="btn btn-small btn-outline" onclick="selectRecent()">Most Recent</button>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <div class="selection-controls" style="margin:0;">
+                        <button class="btn btn-small btn-outline" onclick="selectAll()">Select All</button>
+                        <button class="btn btn-small btn-outline" onclick="selectNone()">Select None</button>
+                        <button class="btn btn-small btn-outline" onclick="selectTop(10)">Top 10</button>
+                        <button class="btn btn-small btn-outline" onclick="selectRecent()">Most Recent</button>
+                    </div>
+                    <span id="videoCountDisplay" style="font-size:0.8125rem;color:var(--color-text-muted);"></span>
                 </div>
                 <div class="video-grid" id="videoGrid">
                     <!-- Videos will be populated here -->
+                </div>
+                <div id="videoGridSentinel" style="height:1px;"></div>
+                <div id="loadMoreIndicator" style="display:none;align-items:center;justify-content:center;padding:12px;gap:8px;">
+                    <div class="loading-spinner"></div>
+                    <span style="font-size:0.8125rem;color:var(--color-text-muted);">Loading more videos...</span>
                 </div>
                 <div style="margin-top: 24px; text-align: center;">
                     <button class="btn btn-cta" disabled id="extractBtn" onclick="extractTranscripts()">
@@ -688,6 +696,13 @@
         let discoveredVideos = [];
         let selectedVideos = new Set();
 
+        // Infinite scroll state
+        const VIDEOS_PAGE_SIZE = 30;
+        let videosOffset = 0;
+        let hasMoreVideos = false;
+        let isLoadingMore = false;
+        let sentinelObserver = null;
+
         // Socket event handlers
         socket.on('connect', function() {
             console.log('Connected to server');
@@ -695,7 +710,7 @@
 
         socket.on('analysis_complete', function(data) {
             if (data.job_id === currentJobId) {
-                handleAnalysisComplete(data.videos);
+                handleAnalysisComplete(data);
             }
         });
 
@@ -770,48 +785,136 @@
             }
         }
 
-        function handleAnalysisComplete(videos) {
+        function handleAnalysisComplete(data) {
+            const videos = data.videos || data;  // support old and new format
+            const total = data.total || videos.length;
+            const hasMore = data.has_more || false;
+
             discoveredVideos = videos;
             hideProgress('analysisProgress');
-            
+
             if (videos.length === 0) {
                 showAlert('No videos found in this channel', 'error');
                 return;
             }
 
-            showAlert('Found ' + videos.length + ' videos!', 'success');
-            populateVideoGrid(videos);
+            showAlert('Found ' + total + ' videos!', 'success');
+            populateVideoGrid(videos, hasMore, total);
             activateStep(2);
         }
 
-        function populateVideoGrid(videos) {
+        function createVideoCard(video) {
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            card.tabIndex = 0;
+            card.onclick = () => toggleVideoSelection(video.video_id);
+            card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggleVideoSelection(video.video_id); };
+
+            card.innerHTML = `
+                <div class="checkbox-container">
+                    <input type="checkbox" id="video_${video.video_id}" onchange="toggleVideoSelection('${video.video_id}')" aria-label="Select ${escapeHtml(video.title)}">
+                </div>
+                <img src="${video.thumbnail}" alt="" class="video-thumbnail" onerror="this.style.display='none'">
+                <div class="video-info">
+                    <div class="video-title">${escapeHtml(video.title)}</div>
+                    <div class="video-meta">
+                        <span>${video.duration}</span>
+                        <span>${video.views}</span>
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function appendVideoCards(videos) {
+            const grid = document.getElementById('videoGrid');
+            videos.forEach(video => grid.appendChild(createVideoCard(video)));
+        }
+
+        function populateVideoGrid(videos, hasMore, total) {
             const grid = document.getElementById('videoGrid');
             grid.innerHTML = '';
+            videos.forEach(video => grid.appendChild(createVideoCard(video)));
 
-            videos.forEach((video, index) => {
-                const card = document.createElement('div');
-                card.className = 'video-card';
-                card.tabIndex = 0;
-                card.onclick = () => toggleVideoSelection(video.video_id);
-                card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggleVideoSelection(video.video_id); };
-                
-                card.innerHTML = `
-                    <div class="checkbox-container">
-                        <input type="checkbox" id="video_${video.video_id}" onchange="toggleVideoSelection('${video.video_id}')" aria-label="Select ${video.title}">
-                    </div>
-                    <img src="${video.thumbnail}" alt="Thumbnail for ${video.title}" class="video-thumbnail" 
-                         onerror="this.style.display='none'">
-                    <div class="video-info">
-                        <div class="video-title">${escapeHtml(video.title)}</div>
-                        <div class="video-meta">
-                            <span>${video.duration}</span>
-                            <span>${video.views}</span>
-                        </div>
-                    </div>
-                `;
-                
-                grid.appendChild(card);
-            });
+            // Reset infinite scroll state
+            videosOffset = videos.length;
+            hasMoreVideos = hasMore || false;
+            isLoadingMore = false;
+
+            // Update count display
+            const countDisplay = document.getElementById('videoCountDisplay');
+            if (countDisplay) {
+                countDisplay.textContent = total > videos.length
+                    ? `Showing ${videos.length} of ${total} videos`
+                    : `${total} video${total !== 1 ? 's' : ''}`;
+            }
+
+            setupInfiniteScroll();
+        }
+
+        function setupInfiniteScroll() {
+            if (sentinelObserver) {
+                sentinelObserver.disconnect();
+            }
+
+            const sentinel = document.getElementById('videoGridSentinel');
+            if (!sentinel) return;
+
+            sentinelObserver = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting && hasMoreVideos && !isLoadingMore) {
+                    loadMoreVideos();
+                }
+            }, { rootMargin: '200px' });
+
+            sentinelObserver.observe(sentinel);
+        }
+
+        async function loadMoreVideos() {
+            if (isLoadingMore || !hasMoreVideos || !currentJobId) return;
+
+            isLoadingMore = true;
+            const indicator = document.getElementById('loadMoreIndicator');
+            if (indicator) indicator.style.display = 'flex';
+
+            try {
+                const response = await fetch('/api/load_more_videos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_id: currentJobId,
+                        offset: videosOffset,
+                        limit: VIDEOS_PAGE_SIZE,
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.videos && data.videos.length > 0) {
+                    appendVideoCards(data.videos);
+                    discoveredVideos = discoveredVideos.concat(data.videos);
+                    videosOffset += data.videos.length;
+                    hasMoreVideos = data.has_more;
+
+                    const countDisplay = document.getElementById('videoCountDisplay');
+                    if (countDisplay) {
+                        countDisplay.textContent = hasMoreVideos
+                            ? `Showing ${videosOffset} of ${data.total} videos`
+                            : `${data.total} video${data.total !== 1 ? 's' : ''}`;
+                    }
+                } else {
+                    hasMoreVideos = false;
+                }
+
+                if (!hasMoreVideos && sentinelObserver) {
+                    sentinelObserver.disconnect();
+                }
+            } catch (e) {
+                console.error('Error loading more videos:', e);
+            } finally {
+                isLoadingMore = false;
+                if (indicator) indicator.style.display = 'none';
+            }
         }
 
         function escapeHtml(text) {
