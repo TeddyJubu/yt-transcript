@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Transcript Extractor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px; margin: 0 auto; background: white;
+            border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white; padding: 40px; text-align: center;
+        }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; font-weight: 700; }
+        .header p { font-size: 1.1rem; opacity: 0.9; }
+        .main-content { padding: 40px; }
+        .step {
+            margin-bottom: 40px; padding: 30px; border: 2px solid #f1f3f4;
+            border-radius: 15px; transition: all 0.3s ease;
+        }
+        .step.active { border-color: #667eea; background: #f8f9ff; }
+        .step-header { display: flex; align-items: center; margin-bottom: 20px; }
+        .step-number {
+            width: 40px; height: 40px; background: #667eea; color: white;
+            border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-weight: bold; margin-right: 15px; flex-shrink: 0;
+        }
+        .step-title { font-size: 1.4rem; font-weight: 600; color: #2c3e50; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; color: #34495e; }
+        .form-control {
+            width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px; transition: border-color 0.3s ease;
+        }
+        .form-control:focus { outline: none; border-color: #667eea; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .btn {
+            padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px;
+            font-weight: 500; cursor: pointer; transition: all 0.3s ease;
+            display: inline-block; text-align: center;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd8; transform: translateY(-2px); }
+        .btn-success { background: #00b894; color: white; }
+        .btn-success:hover { background: #00a085; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-small { padding: 8px 16px; font-size: 14px; }
+        .progress-container { margin: 20px 0; display: none; }
+        .progress-bar { width: 100%; height: 8px; background: #e1e8ed; border-radius: 4px; overflow: hidden; }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%; transition: width 0.3s ease;
+        }
+        .progress-text { margin-top: 10px; text-align: center; color: #666; }
+        .video-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px; margin-top: 20px;
+        }
+        .video-card {
+            position: relative; border: 2px solid #e1e8ed; border-radius: 12px;
+            overflow: hidden; transition: all 0.3s ease; cursor: pointer;
+        }
+        .video-card:hover { border-color: #667eea; transform: translateY(-2px); }
+        .video-card.selected { border-color: #00b894; background: #f0fff4; }
+        .video-thumbnail { width: 100%; height: 180px; object-fit: cover; background: #f3f4f6; }
+        .video-info { padding: 15px; }
+        .video-title { font-weight: 600; margin-bottom: 8px; color: #2c3e50; font-size: 14px; line-height: 1.4; }
+        .video-meta { font-size: 12px; color: #666; display: flex; justify-content: space-between; }
+        .checkbox-container {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(0,0,0,0.7); border-radius: 4px; padding: 5px;
+        }
+        .selection-controls { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+        .alert { padding: 15px; border-radius: 8px; margin: 10px 0; font-size: 14px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .results-header {
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px; margin-bottom: 20px;
+        }
+        .result-card { border: 1px solid #e1e8ed; border-radius: 10px; margin-bottom: 15px; overflow: hidden; }
+        .result-card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px; background: #f8f9fa; cursor: pointer;
+        }
+        .result-card-header h4 { font-size: 14px; color: #2c3e50; margin: 0; flex: 1; margin-right: 10px; }
+        .result-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .transcript-content, .summary-content { padding: 15px; border-top: 1px solid #e1e8ed; display: none; }
+        .transcript-content pre {
+            white-space: pre-wrap; word-wrap: break-word; font-size: 13px; line-height: 1.6;
+            max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 15px; border-radius: 8px;
+        }
+        .summary-content .summary-text { font-size: 14px; line-height: 1.7; color: #333; }
+        .summary-content .summary-text h2,
+        .summary-content .summary-text h3 { margin: 12px 0 8px; color: #2c3e50; }
+        .summary-content .summary-text li { margin-left: 20px; margin-bottom: 4px; }
+        .loading-spinner {
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid #f3f3f3; border-top: 2px solid #667eea;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            margin-right: 8px; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .api-key-note { font-size: 12px; color: #888; margin-top: 4px; }
+        @media (max-width: 768px) {
+            .form-row { grid-template-columns: 1fr; }
+            .header h1 { font-size: 1.8rem; }
+            .main-content { padding: 20px; }
+            .step { padding: 20px; }
+            .results-header { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>YouTube Transcript Extractor</h1>
+            <p>Extract transcripts from YouTube channels &amp; summarize with Gemini AI</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Step 1 -->
+            <div class="step active" id="step1">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Channel &amp; Settings</div>
+                </div>
+                <div class="form-group">
+                    <label>YouTube Channel URL</label>
+                    <input type="text" class="form-control" id="channelUrl"
+                           placeholder="https://www.youtube.com/@channelname">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date Range</label>
+                        <select class="form-control" id="dateFilter">
+                            <option value="this_month">This month</option>
+                            <option value="last_3_months" selected>Last 3 months</option>
+                            <option value="last_6_months">Last 6 months</option>
+                            <option value="this_year">This year</option>
+                            <option value="last_year">Last year</option>
+                            <option value="all_time">All time</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Output Format</label>
+                        <select class="form-control" id="outputFormat">
+                            <option value="txt">Text (.txt)</option>
+                            <option value="md">Markdown (.md)</option>
+                            <option value="both" selected>Both</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Gemini API Key (optional &mdash; enables AI summaries)</label>
+                    <input type="password" class="form-control" id="geminiApiKey"
+                           placeholder="Enter your Gemini API key">
+                    <div class="api-key-note">Your key is sent only to Google's API and is never stored.</div>
+                </div>
+                <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeChannel()">
+                    Analyze Channel
+                </button>
+                <div class="progress-container" id="analysisProgress">
+                    <div class="progress-bar"><div class="progress-fill" id="analysisProgressFill"></div></div>
+                    <div class="progress-text" id="analysisProgressText">Analyzing channel...</div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step" id="step2">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Select Videos</div>
+                </div>
+                <div class="selection-controls">
+                    <button class="btn btn-small btn-primary" onclick="selectAll()">Select All</button>
+                    <button class="btn btn-small btn-primary" onclick="selectNone()">Select None</button>
+                    <button class="btn btn-small btn-primary" onclick="selectTop(10)">Top 10</button>
+                    <button class="btn btn-small btn-primary" onclick="selectTop(5)">Top 5</button>
+                </div>
+                <div class="video-grid" id="videoGrid"></div>
+                <div style="margin-top:20px">
+                    <button class="btn btn-success" id="extractBtn" disabled onclick="extractTranscripts()">
+                        Extract Transcripts (<span id="selectedCount">0</span> videos)
+                    </button>
+                </div>
+                <div class="progress-container" id="extractionProgress">
+                    <div class="progress-bar"><div class="progress-fill" id="extractionProgressFill"></div></div>
+                    <div class="progress-text" id="extractionProgressText">Extracting transcripts...</div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step" id="step3">
+                <div class="step-header">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Results</div>
+                </div>
+                <div id="resultsSection" style="display:none">
+                    <div class="results-header">
+                        <h3 id="resultsTitle">Extraction Complete</h3>
+                        <div>
+                            <button class="btn btn-small btn-primary" onclick="downloadAllZip()">Download All (ZIP)</button>
+                            <button class="btn btn-small btn-success" id="summarizeAllBtn"
+                                    onclick="summarizeAll()" style="display:none">Summarize All</button>
+                        </div>
+                    </div>
+                    <div id="resultsContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+let discoveredVideos = [];
+let selectedVideos = new Set();
+let extractedResults = [];
+
+async function analyzeChannel() {
+    const url = document.getElementById('channelUrl').value.trim();
+    const dateFilter = document.getElementById('dateFilter').value;
+    if (!url) { showAlert('Please enter a YouTube channel URL', 'error'); return; }
+
+    document.getElementById('analyzeBtn').disabled = true;
+    showProgress('analysisProgress');
+    updateProgress('analysisProgress', 40, 'Fetching channel videos...');
+
+    try {
+        const res = await fetch('/api/analyze_channel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel_url: url, date_filter: dateFilter })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Analysis failed');
+
+        discoveredVideos = data.videos;
+        hideProgress('analysisProgress');
+
+        if (!discoveredVideos.length) { showAlert('No videos found', 'error'); return; }
+
+        showAlert('Found ' + discoveredVideos.length + ' videos!', 'success');
+        populateVideoGrid(discoveredVideos);
+        activateStep(2);
+    } catch (e) {
+        hideProgress('analysisProgress');
+        showAlert('Error: ' + e.message, 'error');
+    } finally {
+        document.getElementById('analyzeBtn').disabled = false;
+    }
+}
+
+function populateVideoGrid(videos) {
+    const grid = document.getElementById('videoGrid');
+    grid.innerHTML = '';
+    videos.forEach(function(v) {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.id = 'card_' + v.videoId;
+        card.onclick = function(e) { if (e.target.tagName !== 'INPUT') toggleVideoSelection(v.videoId); };
+        card.innerHTML =
+            '<div class="checkbox-container">' +
+                '<input type="checkbox" id="cb_' + v.videoId + '" onchange="toggleVideoSelection(\'' + v.videoId + '\')">' +
+            '</div>' +
+            '<img src="' + v.thumbnail + '" alt="" class="video-thumbnail" onerror="this.style.display=\'none\'">' +
+            '<div class="video-info">' +
+                '<div class="video-title">' + escapeHtml(v.title) + '</div>' +
+                '<div class="video-meta"><span>' + v.duration + '</span><span>' + v.views + '</span></div>' +
+            '</div>';
+        grid.appendChild(card);
+    });
+}
+
+function toggleVideoSelection(id) {
+    var cb = document.getElementById('cb_' + id);
+    var card = document.getElementById('card_' + id);
+    if (selectedVideos.has(id)) {
+        selectedVideos.delete(id); card.classList.remove('selected'); cb.checked = false;
+    } else {
+        selectedVideos.add(id); card.classList.add('selected'); cb.checked = true;
+    }
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    document.getElementById('selectedCount').textContent = selectedVideos.size;
+    document.getElementById('extractBtn').disabled = selectedVideos.size === 0;
+}
+
+function selectAll() {
+    discoveredVideos.forEach(function(v) {
+        selectedVideos.add(v.videoId);
+        var cb = document.getElementById('cb_' + v.videoId);
+        var card = document.getElementById('card_' + v.videoId);
+        if (cb) cb.checked = true;
+        if (card) card.classList.add('selected');
+    });
+    updateSelectedCount();
+}
+
+function selectNone() {
+    selectedVideos.clear();
+    discoveredVideos.forEach(function(v) {
+        var cb = document.getElementById('cb_' + v.videoId);
+        var card = document.getElementById('card_' + v.videoId);
+        if (cb) cb.checked = false;
+        if (card) card.classList.remove('selected');
+    });
+    updateSelectedCount();
+}
+
+function selectTop(n) {
+    selectNone();
+    discoveredVideos.slice(0, n).forEach(function(v) {
+        selectedVideos.add(v.videoId);
+        var cb = document.getElementById('cb_' + v.videoId);
+        var card = document.getElementById('card_' + v.videoId);
+        if (cb) cb.checked = true;
+        if (card) card.classList.add('selected');
+    });
+    updateSelectedCount();
+}
+
+async function extractTranscripts() {
+    if (selectedVideos.size === 0) { showAlert('Select at least one video', 'error'); return; }
+
+    var urls = discoveredVideos
+        .filter(function(v) { return selectedVideos.has(v.videoId); })
+        .map(function(v) { return v.url; });
+
+    document.getElementById('extractBtn').disabled = true;
+    showProgress('extractionProgress');
+    extractedResults = [];
+
+    var BATCH = 5;
+    for (var i = 0; i < urls.length; i += BATCH) {
+        var batch = urls.slice(i, i + BATCH);
+        var pct = Math.round((i / urls.length) * 100);
+        updateProgress('extractionProgress', pct,
+            'Extracting batch ' + (Math.floor(i / BATCH) + 1) + '/' + Math.ceil(urls.length / BATCH) + '...');
+        try {
+            var res = await fetch('/api/extract_transcripts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ video_urls: batch })
+            });
+            var data = await res.json();
+            if (data.results) extractedResults = extractedResults.concat(data.results);
+        } catch (e) {
+            console.error('Batch error:', e);
+        }
+    }
+
+    hideProgress('extractionProgress');
+    document.getElementById('extractBtn').disabled = false;
+    showResults();
+    activateStep(3);
+}
+
+function showResults() {
+    var section = document.getElementById('resultsSection');
+    var container = document.getElementById('resultsContainer');
+    var apiKey = document.getElementById('geminiApiKey').value.trim();
+    var success = extractedResults.filter(function(r) { return r.success; }).length;
+
+    document.getElementById('resultsTitle').textContent =
+        'Extracted ' + success + '/' + extractedResults.length + ' transcripts';
+
+    if (apiKey) document.getElementById('summarizeAllBtn').style.display = 'inline-block';
+    else document.getElementById('summarizeAllBtn').style.display = 'none';
+
+    container.innerHTML = '';
+    extractedResults.forEach(function(r, idx) {
+        var card = document.createElement('div');
+        card.className = 'result-card';
+        var icon = r.success ? '&#9989;' : '&#10060;';
+        var title = r.title || r.videoId || 'Unknown';
+        var actions = '';
+        if (r.success) {
+            actions =
+                '<button class="btn btn-small btn-primary" onclick="event.stopPropagation();toggleSection(\'transcript_' + idx + '\')">View</button>' +
+                (apiKey ? '<button class="btn btn-small btn-success" id="sumBtn_' + idx + '" onclick="event.stopPropagation();summarizeSingle(' + idx + ')">Summarize</button>' : '') +
+                '<button class="btn btn-small btn-primary" onclick="event.stopPropagation();downloadSingle(' + idx + ')">Download</button>';
+        } else {
+            actions = '<span style="color:#e74c3c;font-size:13px">' + escapeHtml(r.error || 'Failed') + '</span>';
+        }
+        card.innerHTML =
+            '<div class="result-card-header" onclick="toggleSection(\'transcript_' + idx + '\')">' +
+                '<h4>' + icon + ' ' + escapeHtml(title) + '</h4>' +
+                '<div class="result-actions">' + actions + '</div>' +
+            '</div>' +
+            (r.success ?
+                '<div class="transcript-content" id="transcript_' + idx + '"><pre>' + escapeHtml(r.transcript) + '</pre></div>' +
+                '<div class="summary-content" id="summary_' + idx + '"><div class="summary-text" id="summaryText_' + idx + '"></div></div>'
+            : '');
+        container.appendChild(card);
+    });
+
+    section.style.display = 'block';
+    showAlert('Extraction complete! ' + success + ' of ' + extractedResults.length + ' transcripts extracted.', 'success');
+}
+
+function toggleSection(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+async function summarizeSingle(idx) {
+    var apiKey = document.getElementById('geminiApiKey').value.trim();
+    if (!apiKey) { showAlert('Enter a Gemini API key to use summarization', 'error'); return; }
+    var r = extractedResults[idx];
+    if (!r || !r.success) return;
+
+    var btn = document.getElementById('sumBtn_' + idx);
+    var sumDiv = document.getElementById('summary_' + idx);
+    var sumText = document.getElementById('summaryText_' + idx);
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>Summarizing...';
+    sumDiv.style.display = 'block';
+    sumText.innerHTML = '<span class="loading-spinner"></span> Generating summary...';
+
+    try {
+        var res = await fetch('/api/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey, transcript: r.transcript, title: r.title || r.videoId })
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Summarization failed');
+        sumText.innerHTML = renderMarkdown(data.summary);
+        btn.textContent = 'Summarized';
+    } catch (e) {
+        sumText.innerHTML = '<span style="color:#e74c3c">Error: ' + escapeHtml(e.message) + '</span>';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    }
+}
+
+async function summarizeAll() {
+    for (var i = 0; i < extractedResults.length; i++) {
+        if (extractedResults[i].success) await summarizeSingle(i);
+    }
+}
+
+function downloadSingle(idx) {
+    var r = extractedResults[idx];
+    if (!r || !r.success) return;
+    var fmt = document.getElementById('outputFormat').value;
+    var name = sanitizeFilename(r.title || r.videoId);
+
+    if (fmt === 'txt' || fmt === 'both') downloadText(name + '.txt', r.transcript);
+    if (fmt === 'md' || fmt === 'both') {
+        var md = '# ' + (r.title || r.videoId) + '\n\n' +
+            '**Language:** ' + (r.language || 'unknown') + '  \n' +
+            '**Auto-generated:** ' + (r.isGenerated != null ? r.isGenerated : 'unknown') + '  \n\n' +
+            '## Transcript\n\n' + r.transcript;
+        downloadText(name + '.md', md);
+    }
+}
+
+async function downloadAllZip() {
+    var fmt = document.getElementById('outputFormat').value;
+    var zip = new JSZip();
+
+    extractedResults.filter(function(r) { return r.success; }).forEach(function(r) {
+        var name = sanitizeFilename(r.title || r.videoId);
+        if (fmt === 'txt' || fmt === 'both') zip.file(name + '.txt', r.transcript);
+        if (fmt === 'md' || fmt === 'both') {
+            var md = '# ' + (r.title || r.videoId) + '\n\n' +
+                '**Language:** ' + (r.language || 'unknown') + '  \n' +
+                '**Auto-generated:** ' + (r.isGenerated != null ? r.isGenerated : 'unknown') + '  \n\n' +
+                '## Transcript\n\n' + r.transcript;
+            zip.file(name + '.md', md);
+        }
+    });
+
+    var blob = await zip.generateAsync({ type: 'blob' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'transcripts.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+function downloadText(filename, content) {
+    var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+function showProgress(id) { document.getElementById(id).style.display = 'block'; }
+function hideProgress(id) { document.getElementById(id).style.display = 'none'; }
+
+function updateProgress(id, pct, msg) {
+    document.getElementById(id + 'Fill').style.width = pct + '%';
+    document.getElementById(id + 'Text').textContent = msg;
+}
+
+function activateStep(n) {
+    document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById('step' + n).classList.add('active');
+    document.getElementById('step' + n).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function showAlert(msg, type) {
+    document.querySelectorAll('.main-content > .alert').forEach(function(a) { a.remove(); });
+    var el = document.createElement('div');
+    el.className = 'alert alert-' + type;
+    el.textContent = msg;
+    var mc = document.querySelector('.main-content');
+    mc.insertBefore(el, mc.firstChild);
+    if (type !== 'error') setTimeout(function() { if (el.parentNode) el.remove(); }, 5000);
+}
+
+function escapeHtml(t) {
+    var d = document.createElement('div');
+    d.textContent = t;
+    return d.innerHTML;
+}
+
+function sanitizeFilename(n) {
+    return n.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_').substring(0, 100) || 'transcript';
+}
+
+function renderMarkdown(text) {
+    return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^\- (.+)$/gm, '<li>$1</li>')
+        .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+}
+</script>
+</body>
+</html>

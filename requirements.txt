@@ -1,0 +1,8 @@
+Flask==3.1.2
+Flask-SocketIO==6.0.1
+youtube-transcript-api==0.6.3
+yt-dlp>=2026.03.21
+requests>=2.32.3
+beautifulsoup4>=4.13.3
+python-socketio>=5.11.0
+eventlet>=0.36.1
