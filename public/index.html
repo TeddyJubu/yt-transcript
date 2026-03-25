@@ -380,6 +380,7 @@
             margin-bottom: 4px;
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -931,75 +932,159 @@ async function extractTranscripts() {
         .filter(function(v) { return selectedVideos.has(v.videoId); })
         .map(function(v) { return v.url; });
 
-    document.getElementById('extractBtn').disabled = true;
-    showProgress('extractionProgress');
-    extractedResults = [];
+    startExtractionStream(urls);
+}
 
-    var BATCH = 5;
-    for (var i = 0; i < urls.length; i += BATCH) {
-        var batch = urls.slice(i, i + BATCH);
-        var pct = Math.round((i / urls.length) * 100);
-        updateProgress('extractionProgress', pct,
-            'Extracting batch ' + (Math.floor(i / BATCH) + 1) + '/' + Math.ceil(urls.length / BATCH) + '...');
-        try {
-            var res = await fetch('/api/extract_transcripts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ video_urls: batch })
-            });
-            var data = await res.json();
-            if (data.results) extractedResults = extractedResults.concat(data.results);
-        } catch (e) {
-            console.error('Batch error:', e);
+function startExtractionStream(urls) {
+    var total = urls.length;
+    extractedResults = [];
+    var resultIndexByVideoId = {};
+
+    document.getElementById('extractBtn').disabled = true;
+    document.getElementById('retryFailedBtn') && (document.getElementById('retryFailedBtn').style.display = 'none');
+    showProgress('extractionProgress');
+    updateProgress('extractionProgress', 0, 'Connecting...');
+
+    // Show results section early so cards stream in live
+    activateStep(3);
+    document.getElementById('resultsSection').style.display = 'block';
+    document.getElementById('resultsContainer').innerHTML = '';
+    document.getElementById('resultsTitle').textContent = 'Extracting 0/' + total + ' transcripts...';
+    document.getElementById('summarizeAllBtn').style.display = 'none';
+
+    var encodedUrls = encodeURIComponent(JSON.stringify(urls));
+    var es = new EventSource('/api/extract_transcripts_stream?urls=' + encodedUrls);
+
+    es.addEventListener('progress', function(e) {
+        var d = JSON.parse(e.data);
+        var pct = Math.round(((d.current - 1) / total) * 100);
+        updateProgress('extractionProgress', pct, 'Processing ' + d.current + '/' + total + '...');
+    });
+
+    es.addEventListener('result', function(e) {
+        var r = JSON.parse(e.data);
+        var idx = extractedResults.length;
+        extractedResults.push(r);
+        resultIndexByVideoId[r.videoId] = idx;
+
+        // Append card immediately
+        var apiKey = document.getElementById('geminiApiKey').value.trim();
+        appendResultCard(r, idx, apiKey);
+
+        var succeeded = extractedResults.filter(function(x) { return x.success; }).length;
+        document.getElementById('resultsTitle').textContent =
+            'Extracting ' + extractedResults.length + '/' + total + ' transcripts (' + succeeded + ' succeeded)';
+    });
+
+    es.addEventListener('done', function(e) {
+        es.close();
+        var d = JSON.parse(e.data);
+        hideProgress('extractionProgress');
+        document.getElementById('extractBtn').disabled = false;
+        document.getElementById('resultsTitle').textContent =
+            'Extracted ' + d.succeeded + '/' + d.total + ' transcripts';
+
+        var apiKey = document.getElementById('geminiApiKey').value.trim();
+        if (apiKey && d.succeeded > 0) document.getElementById('summarizeAllBtn').style.display = 'inline-flex';
+
+        showAlert('Done! ' + d.succeeded + ' of ' + d.total + ' transcripts extracted.', d.succeeded === d.total ? 'success' : 'info');
+
+        // Show retry button if any failed
+        if (d.failed > 0) showRetryFailedButton();
+    });
+
+    es.addEventListener('error', function() {
+        // EventSource has no way to distinguish network drop from normal close;
+        // only show error if we haven't received a 'done' yet
+        if (!es.CLOSED && es.readyState === EventSource.CLOSED) return;
+        es.close();
+        hideProgress('extractionProgress');
+        document.getElementById('extractBtn').disabled = false;
+        showAlert('Stream connection interrupted. Try again or use the batch button.', 'error');
+    });
+}
+
+function showRetryFailedButton() {
+    var btn = document.getElementById('retryFailedBtn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'retryFailedBtn';
+        btn.className = 'btn btn-small btn-outline';
+        btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/></svg> Retry Failed';
+        btn.onclick = retryFailed;
+        document.getElementById('resultsActions') && document.getElementById('resultsActions').appendChild(btn);
+        // Fallback: append near results header
+        if (!document.getElementById('retryFailedBtn')) {
+            document.querySelector('.results-actions').appendChild(btn);
         }
     }
+    btn.style.display = 'inline-flex';
+}
 
-    hideProgress('extractionProgress');
-    document.getElementById('extractBtn').disabled = false;
-    showResults();
-    activateStep(3);
+function retryFailed() {
+    var failedUrls = extractedResults
+        .filter(function(r) { return !r.success; })
+        .map(function(r) { return 'https://www.youtube.com/watch?v=' + r.videoId; });
+
+    if (!failedUrls.length) return;
+
+    // Remove failed result cards from the DOM and from extractedResults
+    extractedResults = extractedResults.filter(function(r, idx) {
+        if (!r.success) {
+            var card = document.getElementById('result_card_' + idx);
+            if (card) card.remove();
+            return false;
+        }
+        return true;
+    });
+
+    startExtractionStream(failedUrls);
+}
+
+
+function appendResultCard(r, idx, apiKey) {
+    var container = document.getElementById('resultsContainer');
+    var card = document.createElement('div');
+    card.className = 'result-card';
+    card.id = 'result_card_' + idx;
+    var iconSvg = r.success
+        ? '<svg class="result-icon success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+        : '<svg class="result-icon error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    var title = r.title || r.videoId || 'Unknown';
+    var actions = '';
+    if (r.success) {
+        actions =
+            '<button class="btn btn-small btn-outline" onclick="event.stopPropagation();toggleSection(\'transcript_' + idx + '\')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View</button>' +
+            (apiKey ? '<button class="btn btn-small btn-success" id="sumBtn_' + idx + '" onclick="event.stopPropagation();summarizeSingle(' + idx + ')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>Summarize</button>' : '') +
+            '<button class="btn btn-small btn-primary" onclick="event.stopPropagation();downloadSingle(' + idx + ')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</button>';
+    } else {
+        actions = '<span style="color:var(--color-error);font-size:0.8125rem">' + escapeHtml(r.error || 'Failed') + '</span>';
+    }
+    card.innerHTML =
+        '<div class="result-card-header" onclick="toggleSection(\'transcript_' + idx + '\')">' +
+            '<h4>' + iconSvg + ' ' + escapeHtml(title) + '</h4>' +
+            '<div class="result-actions">' + actions + '</div>' +
+        '</div>' +
+        (r.success ?
+            '<div class="transcript-content" id="transcript_' + idx + '"><pre>' + escapeHtml(r.transcript) + '</pre></div>' +
+            '<div class="summary-content" id="summary_' + idx + '"><div class="summary-text" id="summaryText_' + idx + '"></div></div>'
+        : '');
+    container.appendChild(card);
 }
 
 function showResults() {
     var section = document.getElementById('resultsSection');
-    var container = document.getElementById('resultsContainer');
     var apiKey = document.getElementById('geminiApiKey').value.trim();
     var success = extractedResults.filter(function(r) { return r.success; }).length;
 
     document.getElementById('resultsTitle').textContent =
         'Extracted ' + success + '/' + extractedResults.length + ' transcripts';
 
-    if (apiKey) document.getElementById('summarizeAllBtn').style.display = 'inline-flex';
+    if (apiKey && success > 0) document.getElementById('summarizeAllBtn').style.display = 'inline-flex';
     else document.getElementById('summarizeAllBtn').style.display = 'none';
 
-    container.innerHTML = '';
-    extractedResults.forEach(function(r, idx) {
-        var card = document.createElement('div');
-        card.className = 'result-card';
-        var iconSvg = r.success 
-            ? '<svg class="result-icon success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-            : '<svg class="result-icon error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
-        var title = r.title || r.videoId || 'Unknown';
-        var actions = '';
-        if (r.success) {
-            actions =
-                '<button class="btn btn-small btn-outline" onclick="event.stopPropagation();toggleSection(\'transcript_' + idx + '\')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View</button>' +
-                (apiKey ? '<button class="btn btn-small btn-success" id="sumBtn_' + idx + '" onclick="event.stopPropagation();summarizeSingle(' + idx + ')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>Summarize</button>' : '') +
-                '<button class="btn btn-small btn-primary" onclick="event.stopPropagation();downloadSingle(' + idx + ')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</button>';
-        } else {
-            actions = '<span style="color:var(--color-error);font-size:0.8125rem">' + escapeHtml(r.error || 'Failed') + '</span>';
-        }
-        card.innerHTML =
-            '<div class="result-card-header" onclick="toggleSection(\'transcript_' + idx + '\')">' +
-                '<h4>' + iconSvg + ' ' + escapeHtml(title) + '</h4>' +
-                '<div class="result-actions">' + actions + '</div>' +
-            '</div>' +
-            (r.success ?
-                '<div class="transcript-content" id="transcript_' + idx + '"><pre>' + escapeHtml(r.transcript) + '</pre></div>' +
-                '<div class="summary-content" id="summary_' + idx + '"><div class="summary-text" id="summaryText_' + idx + '"></div></div>'
-            : '');
-        container.appendChild(card);
-    });
+    document.getElementById('resultsContainer').innerHTML = '';
+    extractedResults.forEach(function(r, idx) { appendResultCard(r, idx, apiKey); });
 
     section.style.display = 'block';
     showAlert('Extraction complete! ' + success + ' of ' + extractedResults.length + ' transcripts extracted.', 'success');
