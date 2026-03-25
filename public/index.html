@@ -3,564 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Transcript Extractor</title>
+    <title>Channel Analyzer Configuration</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- Google Fonts: Poppins for headings, Open Sans for body -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* CSS Reset & Base */
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
         
-        /* CSS Custom Properties - Semantic Color Tokens */
-        :root {
-            --color-primary: #2563EB;
-            --color-primary-hover: #1D4ED8;
-            --color-primary-light: #DBEAFE;
-            --color-secondary: #3B82F6;
-            --color-cta: #F97316;
-            --color-cta-hover: #EA580C;
-            --color-success: #059669;
-            --color-success-light: #D1FAE5;
-            --color-error: #DC2626;
-            --color-error-light: #FEE2E2;
-            --color-info: #0284C7;
-            --color-info-light: #E0F2FE;
-            --color-surface: #FFFFFF;
-            --color-surface-elevated: #F8FAFC;
-            --color-surface-muted: #F1F5F9;
-            --color-border: #E2E8F0;
-            --color-border-hover: #CBD5E1;
-            --color-text: #1E293B;
-            --color-text-secondary: #475569;
-            --color-text-muted: #64748B;
-            --color-text-on-primary: #FFFFFF;
-            --radius-sm: 6px;
-            --radius-md: 8px;
-            --radius-lg: 12px;
-            --radius-xl: 16px;
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            --transition-fast: 150ms ease;
-            --transition-normal: 200ms ease;
-            --font-heading: 'Poppins', sans-serif;
-            --font-body: 'Open Sans', sans-serif;
-        }
-
-        /* Base Styles */
         body {
-            font-family: var(--font-body);
-            background: var(--color-surface-muted);
-            color: var(--color-text);
-            min-height: 100vh;
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            font-family: 'Inter', sans-serif;
+            background-color: #EAECE1; 
+            color: #1A1A1A; 
         }
 
-        /* Container */
-        .container {
-            max-width: 1120px;
-            margin: 0 auto;
-            background: var(--color-surface);
-            min-height: 100vh;
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-color: transparent;
+        }
+        
+        select option {
+            background-color: #EAECE1;
+            color: #1A1A1A;
         }
 
-        /* Header */
-        .header {
-            background: var(--color-primary);
-            color: var(--color-text-on-primary);
-            padding: 48px 40px;
-            border-bottom: 1px solid var(--color-primary-hover);
-        }
-        
-        .header-content {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        
-        .header-icon {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 16px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: var(--radius-lg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .header-icon svg {
-            width: 32px;
-            height: 32px;
-            stroke: currentColor;
-        }
-
-        .header h1 {
-            font-family: var(--font-heading);
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-            letter-spacing: -0.025em;
-        }
-        
-        .header p {
-            font-size: 1rem;
-            color: rgba(255, 255, 255, 0.85);
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
-        /* Main Content */
-        .main-content {
-            padding: 40px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        /* Steps */
-        .step {
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-xl);
-            padding: 32px;
-            margin-bottom: 24px;
-            transition: border-color var(--transition-fast);
-        }
-        
-        .step.active {
-            border-color: var(--color-primary);
-        }
-
-        .step-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .step-number {
-            width: 36px;
-            height: 36px;
-            background: var(--color-surface-muted);
-            color: var(--color-text-secondary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: var(--font-heading);
-            font-weight: 600;
-            font-size: 0.875rem;
-            margin-right: 12px;
-            flex-shrink: 0;
-            transition: background var(--transition-fast), color var(--transition-fast);
-        }
-        
-        .step.active .step-number {
-            background: var(--color-primary);
-            color: var(--color-text-on-primary);
-        }
-
-        .step-title {
-            font-family: var(--font-heading);
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--color-text);
-        }
-
-        /* Form Elements */
-        .form-group { margin-bottom: 20px; }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 500;
-            font-size: 0.875rem;
-            color: var(--color-text-secondary);
-        }
-        
-        .form-control {
-            width: 100%;
-            padding: 12px 14px;
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-md);
-            font-family: var(--font-body);
-            font-size: 0.9375rem;
-            color: var(--color-text);
-            background: var(--color-surface);
-            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-        }
-        
-        .form-control::placeholder {
-            color: var(--color-text-muted);
-        }
-        
-        .form-control:hover {
-            border-color: var(--color-border-hover);
-        }
-        
-        .form-control:focus {
-            outline: none;
-            border-color: var(--color-primary);
-            box-shadow: 0 0 0 3px var(--color-primary-light);
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-        
-        .api-key-note {
-            font-size: 0.75rem;
-            color: var(--color-text-muted);
-            margin-top: 4px;
-        }
-
-        /* Buttons */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 10px 20px;
-            border: none;
-            border-radius: var(--radius-md);
-            font-family: var(--font-body);
-            font-size: 0.875rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background var(--transition-fast), transform var(--transition-fast);
-            text-decoration: none;
-        }
-        
-        .btn:focus-visible {
-            outline: 2px solid var(--color-primary);
-            outline-offset: 2px;
-        }
-        
-        .btn-primary {
-            background: var(--color-primary);
-            color: var(--color-text-on-primary);
-        }
-        
-        .btn-primary:hover:not(:disabled) {
-            background: var(--color-primary-hover);
-        }
-        
-        .btn-primary:active:not(:disabled) {
-            transform: scale(0.98);
-        }
-        
-        .btn-cta {
-            background: var(--color-cta);
-            color: var(--color-text-on-primary);
-        }
-        
-        .btn-cta:hover:not(:disabled) {
-            background: var(--color-cta-hover);
-        }
-        
-        .btn-success {
-            background: var(--color-success);
-            color: var(--color-text-on-primary);
-        }
-        
-        .btn-success:hover:not(:disabled) {
-            background: #047857;
-        }
-        
-        .btn-outline {
-            background: transparent;
-            color: var(--color-primary);
-            border: 1px solid var(--color-border);
-        }
-        
-        .btn-outline:hover:not(:disabled) {
-            background: var(--color-surface-muted);
-            border-color: var(--color-border-hover);
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .btn-small {
-            padding: 8px 14px;
-            font-size: 0.8125rem;
-        }
-        
-        .btn-icon {
-            width: 18px;
-            height: 18px;
-            stroke: currentColor;
-            stroke-width: 2;
-            fill: none;
-        }
-
-        /* Progress */
-        .progress-container {
-            margin: 20px 0;
-            display: none;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 6px;
-            background: var(--color-surface-muted);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: var(--color-primary);
-            width: 0%;
-            transition: width var(--transition-fast);
-        }
-        
-        .progress-text {
-            margin-top: 8px;
-            font-size: 0.8125rem;
-            color: var(--color-text-muted);
-            text-align: center;
-        }
-
-        /* Video Grid */
-        .video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
-            gap: 10px;
-            margin-top: 16px;
-        }
-        
-        .video-card {
-            position: relative;
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            cursor: pointer;
-            transition: border-color var(--transition-fast), box-shadow var(--transition-normal);
-        }
-        
-        .video-card:hover {
-            border-color: var(--color-primary);
-            box-shadow: var(--shadow-md);
-        }
-        
-        .video-card:focus-visible {
-            outline: 2px solid var(--color-primary);
-            outline-offset: 2px;
-        }
-        
-        .video-card.selected {
-            border-color: var(--color-success);
-            background: var(--color-success-light);
-        }
-        
-        .video-thumbnail {
-            width: 100%;
-            height: 98px;
-            object-fit: cover;
-            background: var(--color-surface-muted);
-        }
-        
-        .video-info {
-            padding: 8px;
-        }
-        
-        .video-title {
-            font-weight: 600;
-            font-size: 0.75rem;
-            line-height: 1.4;
-            color: var(--color-text);
-            margin-bottom: 4px;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        
-        .video-meta {
-            font-size: 0.6875rem;
-            color: var(--color-text-muted);
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .checkbox-container {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: var(--radius-sm);
-            padding: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .checkbox-container input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--color-success);
-            cursor: pointer;
-        }
-
-        /* Selection Controls */
-        .selection-controls {
-            margin: 20px 0;
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        /* Alerts */
-        .alert {
-            padding: 12px 16px;
-            border-radius: var(--radius-md);
-            margin: 12px 0;
-            font-size: 0.875rem;
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-        }
-        
-        .alert-icon {
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
-            margin-top: 1px;
-        }
-        
-        .alert-success {
-            background: var(--color-success-light);
-            color: #065F46;
-        }
-        
-        .alert-error {
-            background: var(--color-error-light);
-            color: #991B1B;
-        }
-        
-        .alert-info {
-            background: var(--color-info-light);
-            color: #075985;
-        }
-
-        /* Results */
-        .results-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-        
-        .results-header h3 {
-            font-family: var(--font-heading);
-            font-size: 1.125rem;
-            font-weight: 600;
-            color: var(--color-text);
-        }
-        
-        .results-actions {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .result-card {
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-lg);
-            margin-bottom: 12px;
-            overflow: hidden;
-        }
-        
-        .result-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px 16px;
-            background: var(--color-surface-muted);
-            cursor: pointer;
-            transition: background var(--transition-fast);
-        }
-        
-        .result-card-header:hover {
-            background: var(--color-border);
-        }
-        
-        .result-card-header h4 {
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--color-text);
-            margin: 0;
-            flex: 1;
-            margin-right: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .result-actions {
-            display: flex;
-            gap: 6px;
-            flex-shrink: 0;
-        }
-        
-        .result-icon {
-            width: 18px;
-            height: 18px;
-            stroke: currentColor;
-            stroke-width: 2;
-            fill: none;
-            flex-shrink: 0;
-        }
-        
-        .result-icon.success { color: var(--color-success); }
-        .result-icon.error { color: var(--color-error); }
-        
-        .transcript-content, .summary-content {
-            padding: 16px;
-            border-top: 1px solid var(--color-border);
-            display: none;
-        }
-        
-        .transcript-content pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-size: 0.8125rem;
-            line-height: 1.7;
-            max-height: 400px;
-            overflow-y: auto;
-            background: var(--color-surface-muted);
-            padding: 16px;
-            border-radius: var(--radius-md);
-        }
-        
-        .summary-content .summary-text {
-            font-size: 0.875rem;
-            line-height: 1.7;
-            color: var(--color-text);
-        }
-        
-        .summary-content .summary-text h2,
-        .summary-content .summary-text h3 {
-            margin: 16px 0 8px;
-            font-family: var(--font-heading);
-            font-weight: 600;
-            color: var(--color-text);
-        }
-        
-        .summary-content .summary-text li {
-            margin-left: 20px;
-            margin-bottom: 4px;
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 30px #EAECE1 inset !important;
+            -webkit-text-fill-color: #1A1A1A !important;
         }
 
         /* Loading Spinner */
@@ -568,74 +40,65 @@
             display: inline-block;
             width: 16px;
             height: 16px;
-            border: 2px solid var(--color-border);
-            border-top-color: var(--color-primary);
+            border: 2px solid #1A1A1A;
+            border-top-color: transparent;
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
         }
         
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .header { padding: 32px 24px; }
-            .header h1 { font-size: 1.5rem; }
-            .main-content { padding: 24px; }
-            .step { padding: 24px; }
-            .form-row { grid-template-columns: 1fr; }
-            .results-header { flex-direction: column; align-items: stretch; }
-            .results-actions { flex-wrap: wrap; }
-        }
-        
-        @media (max-width: 480px) {
-            .video-grid { grid-template-columns: 1fr; }
-            .selection-controls { flex-direction: column; }
-            .selection-controls .btn { width: 100%; }
-        }
+        /* Custom Scrollbar for Pre tags */
+        pre::-webkit-scrollbar { width: 6px; }
+        pre::-webkit-scrollbar-track { background: transparent; }
+        pre::-webkit-scrollbar-thumb { background: rgba(26,26,26,0.2); border-radius: 3px; }
 
-        /* Reduced Motion */
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
+        .hidden-step { display: none !important; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <header class="header">
-            <div class="header-content">
-                <div class="header-icon">
-                    <!-- Video Icon (Lucide) -->
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <path d="m10 13-3 2 3 2v-4z"/>
-                    </svg>
-                </div>
-                <h1>YouTube Transcript Extractor</h1>
-                <p>Extract transcripts from YouTube channels and summarize with AI</p>
+<body class="w-screen min-h-screen flex items-center justify-center p-6 sm:p-12 overflow-x-hidden antialiased selection:bg-[#1A1A1A] selection:text-[#EAECE1]">
+
+    <main class="w-full max-w-[720px] bg-[#EAECE1] border border-[#1A1A1A] rounded-[2.5rem] p-8 sm:p-14 relative shadow-sm transition-all duration-300">
+        
+        <!-- Header / Tracker -->
+        <header class="flex items-center justify-between mb-12">
+            <div class="flex items-center gap-3">
+                <span class="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1A1A1A]" id="stepTrackerText">Step 1 of 3</span>
+            </div>
+            
+            <div class="flex gap-1.5" id="stepDots">
+                <div class="w-1.5 h-1.5 rounded-full bg-[#1A1A1A]" id="dot1"></div>
+                <div class="w-1.5 h-1.5 rounded-full border border-[#1A1A1A]" id="dot2"></div>
+                <div class="w-1.5 h-1.5 rounded-full border border-[#1A1A1A]" id="dot3"></div>
             </div>
         </header>
 
-        <div class="main-content">
-            <!-- Step 1 -->
-            <div class="step active" id="step1">
-                <div class="step-header">
-                    <div class="step-number">1</div>
-                    <div class="step-title">Channel &amp; Settings</div>
+        <!-- Dynamic Title -->
+        <h1 class="text-4xl sm:text-5xl font-light tracking-tight mb-12 text-[#1A1A1A]" id="mainTitle">
+            Channel &amp; Settings
+        </h1>
+
+        <!-- Global Alerts Container -->
+        <div id="alertsContainer" class="mb-8 space-y-2 empty:hidden"></div>
+
+        <!-- Step 1: Settings -->
+        <form class="space-y-8" id="step1">
+            <div class="space-y-3">
+                <label for="channelUrl" class="block text-[11px] font-semibold uppercase tracking-[0.15em] ml-6 text-[#1A1A1A]">
+                    YouTube Channel URL
+                </label>
+                <div class="relative">
+                    <input type="url" id="channelUrl" placeholder="https://youtube.com/@..." class="w-full bg-transparent border border-[#1A1A1A] rounded-full px-6 py-4 outline-none focus:ring-1 focus:ring-[#1A1A1A] placeholder:text-[#1A1A1A]/40 transition-shadow text-base text-[#1A1A1A]">
                 </div>
-                <div class="form-group">
-                    <label>YouTube Channel URL</label>
-                    <input type="text" class="form-control" id="channelUrl"
-                           placeholder="https://www.youtube.com/@channelname">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Date Range</label>
-                        <select class="form-control" id="dateFilter">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                <div class="space-y-3">
+                    <label for="dateFilter" class="block text-[11px] font-semibold uppercase tracking-[0.15em] ml-6 text-[#1A1A1A]">
+                        Date Range
+                    </label>
+                    <div class="relative">
+                        <select id="dateFilter" class="w-full bg-transparent border border-[#1A1A1A] rounded-full px-6 py-4 outline-none focus:ring-1 focus:ring-[#1A1A1A] cursor-pointer text-base pr-12 text-[#1A1A1A]">
                             <option value="this_month">This month</option>
                             <option value="last_3_months" selected>Last 3 months</option>
                             <option value="last_6_months">Last 6 months</option>
@@ -643,91 +106,128 @@
                             <option value="last_year">Last year</option>
                             <option value="all_time">All time</option>
                         </select>
+                        <div class="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-[#1A1A1A]">
+                            <svg width="14" height="8" viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 1L7 7L13 1"></path>
+                            </svg>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Output Format</label>
-                        <select class="form-control" id="outputFormat">
+                </div>
+
+                <div class="space-y-3">
+                    <label for="outputFormat" class="block text-[11px] font-semibold uppercase tracking-[0.15em] ml-6 text-[#1A1A1A]">
+                        Output Format
+                    </label>
+                    <div class="relative">
+                        <select id="outputFormat" class="w-full bg-transparent border border-[#1A1A1A] rounded-full px-6 py-4 outline-none focus:ring-1 focus:ring-[#1A1A1A] cursor-pointer text-base pr-12 text-[#1A1A1A]">
                             <option value="txt">Text (.txt)</option>
                             <option value="md">Markdown (.md)</option>
                             <option value="both" selected>Both</option>
                         </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Gemini API Key (optional &mdash; enables AI summaries)</label>
-                    <input type="password" class="form-control" id="geminiApiKey"
-                           placeholder="Enter your Gemini API key">
-                    <div class="api-key-note">Your key is sent only to Google's API and is never stored.</div>
-                </div>
-                <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeChannel()">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    Analyze Channel
-                </button>
-                <div class="progress-container" id="analysisProgress">
-                    <div class="progress-bar"><div class="progress-fill" id="analysisProgressFill"></div></div>
-                    <div class="progress-text" id="analysisProgressText">Analyzing channel...</div>
-                </div>
-            </div>
-
-            <!-- Step 2 -->
-            <div class="step" id="step2">
-                <div class="step-header">
-                    <div class="step-number">2</div>
-                    <div class="step-title">Select Videos</div>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                    <div class="selection-controls" style="margin:0;">
-                        <button class="btn btn-small btn-primary" onclick="selectAll()">Select All</button>
-                        <button class="btn btn-small btn-primary" onclick="selectNone()">Select None</button>
-                        <button class="btn btn-small btn-primary" onclick="selectTop(10)">Top 10</button>
-                        <button class="btn btn-small btn-primary" onclick="selectTop(5)">Top 5</button>
-                    </div>
-                    <span id="videoCountDisplay" style="font-size:0.8125rem;color:var(--color-text-muted);"></span>
-                </div>
-                <div class="video-grid" id="videoGrid"></div>
-                <div id="videoGridSentinel" style="height:1px;"></div>
-                <div id="loadMoreIndicator" style="display:none;align-items:center;justify-content:center;padding:12px;gap:8px;">
-                    <div class="loading-spinner"></div>
-                    <span style="font-size:0.8125rem;color:var(--color-text-muted);">Loading more videos...</span>
-                </div>
-                <div style="margin-top:20px">
-                    <button class="btn btn-cta" id="extractBtn" disabled onclick="extractTranscripts()">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Extract Transcripts (<span id="selectedCount">0</span> videos)
-                    </button>
-                </div>
-                <div class="progress-container" id="extractionProgress">
-                    <div class="progress-bar"><div class="progress-fill" id="extractionProgressFill"></div></div>
-                    <div class="progress-text" id="extractionProgressText">Extracting transcripts...</div>
-                </div>
-            </div>
-
-            <!-- Step 3 -->
-            <div class="step" id="step3">
-                <div class="step-header">
-                    <div class="step-number">3</div>
-                    <div class="step-title">Results</div>
-                </div>
-                <div id="resultsSection" style="display:none">
-                    <div class="results-header">
-                        <h3 id="resultsTitle">Extraction Complete</h3>
-                        <div class="results-actions">
-                            <button class="btn btn-small btn-outline" onclick="downloadAllZip()">
-                                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                Download All (ZIP)
-                            </button>
-                            <button class="btn btn-small btn-success" id="summarizeAllBtn"
-                                    onclick="summarizeAll()" style="display:none">
-                                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                                Summarize All
-                            </button>
+                        <div class="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-[#1A1A1A]">
+                            <svg width="14" height="8" viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 1L7 7L13 1"></path>
+                            </svg>
                         </div>
                     </div>
-                    <div id="resultsContainer"></div>
                 </div>
             </div>
+
+            <div class="space-y-3 pt-2">
+                <label for="geminiApiKey" class="block text-[11px] font-semibold uppercase tracking-[0.15em] ml-6 text-[#1A1A1A]">
+                    Gemini API Key
+                </label>
+                <input type="password" id="geminiApiKey" placeholder="AIzaSy..." class="w-full bg-transparent border border-[#1A1A1A] rounded-full px-6 py-4 outline-none focus:ring-1 focus:ring-[#1A1A1A] placeholder:text-[#1A1A1A]/40 transition-shadow text-base font-mono text-[#1A1A1A]">
+                <p class="text-[13px] ml-6 text-[#1A1A1A]/70 mt-2 leading-relaxed">
+                    Optional. Enables AI-powered video summaries and topical insights generation.
+                </p>
+            </div>
+
+            <hr class="border-t border-[#1A1A1A]/20 my-10">
+
+            <button type="button" id="analyzeBtn" onclick="analyzeChannel()" class="w-full bg-[#1A1A1A] text-[#EAECE1] rounded-full py-5 px-8 flex justify-between items-center group hover:bg-opacity-90 transition-all duration-300 border border-[#1A1A1A]">
+                <span class="text-[13px] font-semibold uppercase tracking-[0.15em] ml-2">Analyze Channel</span>
+                <div class="w-8 h-8 rounded-full border border-[#EAECE1]/30 flex items-center justify-center group-hover:translate-x-1 transition-transform duration-300">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </div>
+            </button>
+
+            <!-- Loading Progress -->
+            <div id="analysisProgress" class="hidden mt-6 space-y-2">
+                <div class="w-full h-1.5 bg-[#1A1A1A]/10 rounded-full overflow-hidden">
+                    <div id="analysisProgressFill" class="h-full bg-[#1A1A1A] w-0 transition-all duration-300"></div>
+                </div>
+                <p id="analysisProgressText" class="text-center text-[11px] font-mono uppercase tracking-wider text-[#1A1A1A]/60">Analyzing channel...</p>
+            </div>
+        </form>
+
+        <!-- Step 2: Select Videos -->
+        <div id="step2" class="hidden-step space-y-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#1A1A1A]/10 pb-6">
+                <div class="flex gap-3 flex-wrap">
+                    <button class="bg-transparent border border-[#1A1A1A] text-[#1A1A1A] rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] hover:bg-[#1A1A1A]/5 transition-colors" onclick="selectAll()">Select All</button>
+                    <button class="bg-transparent border border-[#1A1A1A] text-[#1A1A1A] rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] hover:bg-[#1A1A1A]/5 transition-colors" onclick="selectNone()">None</button>
+                    <button class="bg-transparent border border-[#1A1A1A] text-[#1A1A1A] rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] hover:bg-[#1A1A1A]/5 transition-colors" onclick="selectTop(10)">Top 10</button>
+                </div>
+                <span id="videoCountDisplay" class="text-[11px] font-mono text-[#1A1A1A]/60"></span>
+            </div>
+
+            <div id="videoGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[50vh] overflow-y-auto pr-2">
+                <!-- Video Cards populated here -->
+            </div>
+            
+            <div id="videoGridSentinel" class="h-1"></div>
+            
+            <div id="loadMoreIndicator" class="hidden justify-center items-center py-4 gap-3">
+                <div class="loading-spinner border-[#1A1A1A]"></div>
+                <span class="text-[11px] font-mono text-[#1A1A1A]/60">Loading more videos...</span>
+            </div>
+
+            <hr class="border-t border-[#1A1A1A]/20 my-10">
+
+            <button type="button" id="extractBtn" disabled onclick="extractTranscripts()" class="w-full bg-[#1A1A1A] text-[#EAECE1] rounded-full py-5 px-8 flex justify-between items-center group hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 border border-[#1A1A1A]">
+                <span class="text-[13px] font-semibold uppercase tracking-[0.15em] ml-2">Extract Transcripts (<span id="selectedCount">0</span>)</span>
+                <div class="w-8 h-8 rounded-full border border-[#EAECE1]/30 flex items-center justify-center group-hover:translate-x-1 transition-transform duration-300">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <polyline points="19 12 12 19 5 12"></polyline>
+                    </svg>
+                </div>
+            </button>
+
+            <!-- Loading Progress -->
+            <div id="extractionProgress" class="hidden mt-6 space-y-2">
+                <div class="w-full h-1.5 bg-[#1A1A1A]/10 rounded-full overflow-hidden">
+                    <div id="extractionProgressFill" class="h-full bg-[#1A1A1A] w-0 transition-all duration-300"></div>
+                </div>
+                <p id="extractionProgressText" class="text-center text-[11px] font-mono uppercase tracking-wider text-[#1A1A1A]/60">Extracting transcripts...</p>
+            </div>
         </div>
-    </div>
+
+        <!-- Step 3: Results -->
+        <div id="step3" class="hidden-step space-y-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#1A1A1A]/10 pb-6" id="resultsActions">
+                <span class="text-[11px] font-mono text-[#1A1A1A]/60" id="resultsTitle">Extraction Complete</span>
+                <div class="flex gap-3 flex-wrap">
+                    <button id="retryFailedBtn" class="bg-transparent border border-[#1A1A1A] text-[#1A1A1A] rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] hover:bg-[#1A1A1A]/5 transition-colors hidden" onclick="retryFailed()">Retry Failed</button>
+                    <button id="summarizeAllBtn" class="bg-[#1A1A1A]/10 border border-[#1A1A1A]/20 text-[#1A1A1A] rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] hover:bg-[#1A1A1A]/20 transition-colors hidden" onclick="summarizeAll()">Summarize All</button>
+                    <button class="bg-[#1A1A1A] border border-[#1A1A1A] text-[#EAECE1] rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] hover:bg-opacity-90 transition-colors" onclick="downloadAllZip()">Download ALL ZIP</button>
+                </div>
+            </div>
+
+            <div id="resultsContainer" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                <!-- Results Cards populated here -->
+            </div>
+            
+            <div class="flex justify-center mt-8">
+                <button type="button" onclick="resetApp()" class="bg-transparent border border-[#1A1A1A] text-[#1A1A1A] rounded-full py-4 px-8 text-[11px] font-semibold uppercase tracking-[0.1em] hover:bg-[#1A1A1A]/5 transition-colors">Start Over</button>
+            </div>
+        </div>
+
+    </main>
 
 <script>
 let discoveredVideos = [];
@@ -740,6 +240,18 @@ let currentDateFilter = 'all_time';
 let hasMoreVideos = false;
 let isLoadingMore = false;
 let sentinelObserver = null;
+
+function resetApp() {
+    discoveredVideos = [];
+    selectedVideos.clear();
+    extractedResults = [];
+    document.getElementById('channelUrl').value = '';
+    document.getElementById('geminiApiKey').value = '';
+    document.getElementById('videoGrid').innerHTML = '';
+    document.getElementById('resultsContainer').innerHTML = '';
+    updateSelectedCount();
+    activateStep(1);
+}
 
 async function analyzeChannel() {
     const url = document.getElementById('channelUrl').value.trim();
@@ -768,7 +280,6 @@ async function analyzeChannel() {
 
         if (!discoveredVideos.length) { showAlert('No videos found', 'error'); return; }
 
-        showAlert('Found videos!', 'success');
         populateVideoGrid(discoveredVideos);
         activateStep(2);
     } catch (e) {
@@ -781,17 +292,22 @@ async function analyzeChannel() {
 
 function createVideoCard(v) {
     const card = document.createElement('div');
-    card.className = 'video-card';
+    card.className = 'group relative bg-[#EAECE1] border border-[#1A1A1A]/20 rounded-2xl overflow-hidden cursor-pointer transition-all hover:border-[#1A1A1A]';
     card.id = 'card_' + v.videoId;
     card.onclick = function(e) { if (e.target.tagName !== 'INPUT') toggleVideoSelection(v.videoId); };
     card.innerHTML =
-        '<div class="checkbox-container">' +
-            '<input type="checkbox" id="cb_' + v.videoId + '" onchange="toggleVideoSelection(\'' + v.videoId + '\')">' +
+        '<div class="absolute top-3 right-3 z-10 w-6 h-6 rounded-full border border-[#1A1A1A]/30 bg-white/80 backdrop-blur flex items-center justify-center transition-colors">' +
+            '<input type="checkbox" id="cb_' + v.videoId + '" onchange="toggleVideoSelection(\'' + v.videoId + '\')" class="opacity-0 absolute inset-0 cursor-pointer w-full h-full">' +
+            '<div class="w-2.5 h-2.5 rounded-full pointer-events-none transition-colors" id="indicator_' + v.videoId + '"></div>' +
         '</div>' +
-        '<img src="' + v.thumbnail + '" alt="" class="video-thumbnail" onerror="this.style.display=\'none\'">' +
-        '<div class="video-info">' +
-            '<div class="video-title">' + escapeHtml(v.title) + '</div>' +
-            '<div class="video-meta"><span>' + v.duration + '</span><span>' + v.views + '</span></div>' +
+        '<div class="w-full h-32 bg-[#1A1A1A]/5 relative overflow-hidden">' +
+            '<img src="' + v.thumbnail + '" alt="" class="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" onerror="this.style.display=\'none\'">' +
+        '</div>' +
+        '<div class="p-4">' +
+            '<div class="font-semibold text-[13px] leading-snug text-[#1A1A1A] mb-2 line-clamp-2">' + escapeHtml(v.title) + '</div>' +
+            '<div class="text-[10px] font-mono text-[#1A1A1A]/50 flex justify-between">' +
+                '<span>' + v.duration + '</span><span>' + v.views + '</span>' +
+            '</div>' +
         '</div>';
     return card;
 }
@@ -836,7 +352,8 @@ async function loadMoreVideos() {
 
     isLoadingMore = true;
     var indicator = document.getElementById('loadMoreIndicator');
-    if (indicator) indicator.style.display = 'flex';
+    if (indicator) indicator.classList.remove('hidden');
+    if (indicator) indicator.classList.add('flex');
 
     try {
         var res = await fetch('/api/load_more_videos', {
@@ -871,17 +388,26 @@ async function loadMoreVideos() {
     } finally {
         isLoadingMore = false;
         var indicator = document.getElementById('loadMoreIndicator');
-        if (indicator) indicator.style.display = 'none';
+        if (indicator) indicator.classList.add('hidden');
+        if (indicator) indicator.classList.remove('flex');
     }
 }
 
 function toggleVideoSelection(id) {
     var cb = document.getElementById('cb_' + id);
     var card = document.getElementById('card_' + id);
+    var indicator = document.getElementById('indicator_' + id);
+    
     if (selectedVideos.has(id)) {
-        selectedVideos.delete(id); card.classList.remove('selected'); cb.checked = false;
+        selectedVideos.delete(id); 
+        card.classList.remove('border-[#1A1A1A]', 'bg-white/50');
+        indicator.classList.remove('bg-[#1A1A1A]');
+        cb.checked = false;
     } else {
-        selectedVideos.add(id); card.classList.add('selected'); cb.checked = true;
+        selectedVideos.add(id); 
+        card.classList.add('border-[#1A1A1A]', 'bg-white/50');
+        indicator.classList.add('bg-[#1A1A1A]');
+        cb.checked = true;
     }
     updateSelectedCount();
 }
@@ -893,36 +419,22 @@ function updateSelectedCount() {
 
 function selectAll() {
     discoveredVideos.forEach(function(v) {
-        selectedVideos.add(v.videoId);
-        var cb = document.getElementById('cb_' + v.videoId);
-        var card = document.getElementById('card_' + v.videoId);
-        if (cb) cb.checked = true;
-        if (card) card.classList.add('selected');
+        if(!selectedVideos.has(v.videoId)) toggleVideoSelection(v.videoId);
     });
-    updateSelectedCount();
 }
 
 function selectNone() {
-    selectedVideos.clear();
-    discoveredVideos.forEach(function(v) {
-        var cb = document.getElementById('cb_' + v.videoId);
-        var card = document.getElementById('card_' + v.videoId);
-        if (cb) cb.checked = false;
-        if (card) card.classList.remove('selected');
+    var copy = Array.from(selectedVideos);
+    copy.forEach(function(id) {
+        toggleVideoSelection(id);
     });
-    updateSelectedCount();
 }
 
 function selectTop(n) {
     selectNone();
     discoveredVideos.slice(0, n).forEach(function(v) {
-        selectedVideos.add(v.videoId);
-        var cb = document.getElementById('cb_' + v.videoId);
-        var card = document.getElementById('card_' + v.videoId);
-        if (cb) cb.checked = true;
-        if (card) card.classList.add('selected');
+        if(!selectedVideos.has(v.videoId)) toggleVideoSelection(v.videoId);
     });
-    updateSelectedCount();
 }
 
 async function extractTranscripts() {
@@ -941,16 +453,14 @@ function startExtractionStream(urls) {
     var resultIndexByVideoId = {};
 
     document.getElementById('extractBtn').disabled = true;
-    document.getElementById('retryFailedBtn') && (document.getElementById('retryFailedBtn').style.display = 'none');
+    document.getElementById('retryFailedBtn').classList.add('hidden');
     showProgress('extractionProgress');
     updateProgress('extractionProgress', 0, 'Connecting...');
 
-    // Show results section early so cards stream in live
     activateStep(3);
-    document.getElementById('resultsSection').style.display = 'block';
     document.getElementById('resultsContainer').innerHTML = '';
-    document.getElementById('resultsTitle').textContent = 'Extracting 0/' + total + ' transcripts...';
-    document.getElementById('summarizeAllBtn').style.display = 'none';
+    document.getElementById('resultsTitle').textContent = 'Extracting 0/' + total;
+    document.getElementById('summarizeAllBtn').classList.add('hidden');
 
     var encodedUrls = encodeURIComponent(JSON.stringify(urls));
     var es = new EventSource('/api/extract_transcripts_stream?urls=' + encodedUrls);
@@ -958,7 +468,7 @@ function startExtractionStream(urls) {
     es.addEventListener('progress', function(e) {
         var d = JSON.parse(e.data);
         var pct = Math.round(((d.current - 1) / total) * 100);
-        updateProgress('extractionProgress', pct, 'Processing ' + d.current + '/' + total + '...');
+        updateProgress('extractionProgress', pct, 'Transcribing ' + d.current + '/' + total + '...');
     });
 
     es.addEventListener('result', function(e) {
@@ -967,13 +477,12 @@ function startExtractionStream(urls) {
         extractedResults.push(r);
         resultIndexByVideoId[r.videoId] = idx;
 
-        // Append card immediately
         var apiKey = document.getElementById('geminiApiKey').value.trim();
         appendResultCard(r, idx, apiKey);
 
         var succeeded = extractedResults.filter(function(x) { return x.success; }).length;
         document.getElementById('resultsTitle').textContent =
-            'Extracting ' + extractedResults.length + '/' + total + ' transcripts (' + succeeded + ' succeeded)';
+            'Success: ' + succeeded + ' / ' + total;
     });
 
     es.addEventListener('done', function(e) {
@@ -981,44 +490,22 @@ function startExtractionStream(urls) {
         var d = JSON.parse(e.data);
         hideProgress('extractionProgress');
         document.getElementById('extractBtn').disabled = false;
-        document.getElementById('resultsTitle').textContent =
-            'Extracted ' + d.succeeded + '/' + d.total + ' transcripts';
-
+        
         var apiKey = document.getElementById('geminiApiKey').value.trim();
-        if (apiKey && d.succeeded > 0) document.getElementById('summarizeAllBtn').style.display = 'inline-flex';
+        if (apiKey && d.succeeded > 0) document.getElementById('summarizeAllBtn').classList.remove('hidden');
 
-        showAlert('Done! ' + d.succeeded + ' of ' + d.total + ' transcripts extracted.', d.succeeded === d.total ? 'success' : 'info');
-
-        // Show retry button if any failed
-        if (d.failed > 0) showRetryFailedButton();
+        if (d.failed > 0) {
+            document.getElementById('retryFailedBtn').classList.remove('hidden');
+        }
     });
 
     es.addEventListener('error', function() {
-        // EventSource has no way to distinguish network drop from normal close;
-        // only show error if we haven't received a 'done' yet
         if (!es.CLOSED && es.readyState === EventSource.CLOSED) return;
         es.close();
         hideProgress('extractionProgress');
         document.getElementById('extractBtn').disabled = false;
-        showAlert('Stream connection interrupted. Try again or use the batch button.', 'error');
+        showAlert('Stream mapping failed. Retry.', 'error');
     });
-}
-
-function showRetryFailedButton() {
-    var btn = document.getElementById('retryFailedBtn');
-    if (!btn) {
-        btn = document.createElement('button');
-        btn.id = 'retryFailedBtn';
-        btn.className = 'btn btn-small btn-outline';
-        btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.04"/></svg> Retry Failed';
-        btn.onclick = retryFailed;
-        document.getElementById('resultsActions') && document.getElementById('resultsActions').appendChild(btn);
-        // Fallback: append near results header
-        if (!document.getElementById('retryFailedBtn')) {
-            document.querySelector('.results-actions').appendChild(btn);
-        }
-    }
-    btn.style.display = 'inline-flex';
 }
 
 function retryFailed() {
@@ -1028,7 +515,6 @@ function retryFailed() {
 
     if (!failedUrls.length) return;
 
-    // Remove failed result cards from the DOM and from extractedResults
     extractedResults = extractedResults.filter(function(r, idx) {
         if (!r.success) {
             var card = document.getElementById('result_card_' + idx);
@@ -1045,59 +531,53 @@ function retryFailed() {
 function appendResultCard(r, idx, apiKey) {
     var container = document.getElementById('resultsContainer');
     var card = document.createElement('div');
-    card.className = 'result-card';
+    card.className = 'border border-[#1A1A1A]/20 rounded-2xl bg-white/40 overflow-hidden';
     card.id = 'result_card_' + idx;
+    
     var iconSvg = r.success
-        ? '<svg class="result-icon success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-        : '<svg class="result-icon error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+        ? '<div class="w-6 h-6 rounded-full bg-[#1A1A1A] text-[#EAECE1] flex items-center justify-center shrink-0"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>'
+        : '<div class="w-6 h-6 rounded-full border border-[#1A1A1A] text-[#1A1A1A] flex items-center justify-center shrink-0"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>';
+    
     var title = r.title || r.videoId || 'Unknown';
+    
     var actions = '';
     if (r.success) {
         actions =
-            '<button class="btn btn-small btn-outline" onclick="event.stopPropagation();toggleSection(\'transcript_' + idx + '\')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View</button>' +
-            (apiKey ? '<button class="btn btn-small btn-success" id="sumBtn_' + idx + '" onclick="event.stopPropagation();summarizeSingle(' + idx + ')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>Summarize</button>' : '') +
-            '<button class="btn btn-small btn-primary" onclick="event.stopPropagation();downloadSingle(' + idx + ')"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</button>';
+            '<div class="flex gap-2 shrink-0">' +
+                '<button class="text-[10px] font-semibold uppercase tracking-wider text-[#1A1A1A] hover:bg-[#1A1A1A]/10 px-3 py-1.5 rounded-full transition-colors" onclick="event.stopPropagation();toggleSection(\'transcript_' + idx + '\')">View</button>' +
+                (apiKey ? '<button class="text-[10px] font-semibold uppercase tracking-wider text-[#1A1A1A] hover:bg-[#1A1A1A]/10 px-3 py-1.5 rounded-full transition-colors" id="sumBtn_' + idx + '" onclick="event.stopPropagation();summarizeSingle(' + idx + ')">Summarize</button>' : '') +
+                '<button class="text-[10px] font-semibold uppercase tracking-wider text-[#1A1A1A] hover:bg-[#1A1A1A]/10 px-3 py-1.5 rounded-full transition-colors" onclick="event.stopPropagation();downloadSingle(' + idx + ')">Save</button>' +
+            '</div>';
     } else {
-        actions = '<span style="color:var(--color-error);font-size:0.8125rem">' + escapeHtml(r.error || 'Failed') + '</span>';
+        actions = '<span class="text-[11px] text-[#1A1A1A]/50 font-mono px-3">' + escapeHtml(r.error || 'Failed') + '</span>';
     }
+    
     card.innerHTML =
-        '<div class="result-card-header" onclick="toggleSection(\'transcript_' + idx + '\')">' +
-            '<h4>' + iconSvg + ' ' + escapeHtml(title) + '</h4>' +
-            '<div class="result-actions">' + actions + '</div>' +
+        '<div class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/60 transition-colors" onclick="toggleSection(\'transcript_' + idx + '\')">' +
+            '<div class="flex items-center gap-3 overflow-hidden mr-4">' + iconSvg + '<span class="text-sm font-medium text-[#1A1A1A] truncate">' + escapeHtml(title) + '</span></div>' +
+            actions +
         '</div>' +
         (r.success ?
-            '<div class="transcript-content" id="transcript_' + idx + '"><pre>' + escapeHtml(r.transcript) + '</pre></div>' +
-            '<div class="summary-content" id="summary_' + idx + '"><div class="summary-text" id="summaryText_' + idx + '"></div></div>'
+            '<div class="hidden-step" id="transcript_' + idx + '"><div class="p-4 border-t border-[#1A1A1A]/10 bg-[#EAECE1]/30"><pre class="text-[11px] font-mono leading-relaxed text-[#1A1A1A]/80 whitespace-pre-wrap max-h-[300px] overflow-y-auto w-full">' + escapeHtml(r.transcript) + '</pre></div></div>' +
+            '<div class="hidden-step" id="summary_' + idx + '"><div class="p-4 border-t border-[#1A1A1A]/10 bg-white"><div class="text-[13px] leading-relaxed text-[#1A1A1A] prose prose-sm max-w-none" id="summaryText_' + idx + '"></div></div></div>'
         : '');
     container.appendChild(card);
 }
 
-function showResults() {
-    var section = document.getElementById('resultsSection');
-    var apiKey = document.getElementById('geminiApiKey').value.trim();
-    var success = extractedResults.filter(function(r) { return r.success; }).length;
-
-    document.getElementById('resultsTitle').textContent =
-        'Extracted ' + success + '/' + extractedResults.length + ' transcripts';
-
-    if (apiKey && success > 0) document.getElementById('summarizeAllBtn').style.display = 'inline-flex';
-    else document.getElementById('summarizeAllBtn').style.display = 'none';
-
-    document.getElementById('resultsContainer').innerHTML = '';
-    extractedResults.forEach(function(r, idx) { appendResultCard(r, idx, apiKey); });
-
-    section.style.display = 'block';
-    showAlert('Extraction complete! ' + success + ' of ' + extractedResults.length + ' transcripts extracted.', 'success');
-}
-
 function toggleSection(id) {
     var el = document.getElementById(id);
-    if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    if (el) {
+        if (el.classList.contains('hidden-step')) {
+            el.classList.remove('hidden-step');
+        } else {
+            el.classList.add('hidden-step');
+        }
+    }
 }
 
 async function summarizeSingle(idx) {
     var apiKey = document.getElementById('geminiApiKey').value.trim();
-    if (!apiKey) { showAlert('Enter a Gemini API key to use summarization', 'error'); return; }
+    if (!apiKey) { showAlert('Enter a Gemini API key', 'error'); return; }
     var r = extractedResults[idx];
     if (!r || !r.success) return;
 
@@ -1106,9 +586,9 @@ async function summarizeSingle(idx) {
     var sumText = document.getElementById('summaryText_' + idx);
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="loading-spinner"></span>Summarizing...';
-    sumDiv.style.display = 'block';
-    sumText.innerHTML = '<span class="loading-spinner"></span> Generating summary...';
+    btn.innerHTML = 'Wait...';
+    sumDiv.classList.remove('hidden-step');
+    sumText.innerHTML = '<div class="flex items-center gap-2"><div class="loading-spinner"></div> <span class="text-[11px] font-mono">Generating Insight</span></div>';
 
     try {
         var res = await fetch('/api/summarize', {
@@ -1119,9 +599,9 @@ async function summarizeSingle(idx) {
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Summarization failed');
         sumText.innerHTML = renderMarkdown(data.summary);
-        btn.textContent = 'Summarized';
+        btn.textContent = 'Done';
     } catch (e) {
-        sumText.innerHTML = '<span style="color:#e74c3c">Error: ' + escapeHtml(e.message) + '</span>';
+        sumText.innerHTML = '<span class="text-[#1A1A1A]/50 font-mono">Failed: ' + escapeHtml(e.message) + '</span>';
         btn.disabled = false;
         btn.textContent = 'Retry';
     }
@@ -1182,8 +662,8 @@ function downloadText(filename, content) {
     URL.revokeObjectURL(a.href);
 }
 
-function showProgress(id) { document.getElementById(id).style.display = 'block'; }
-function hideProgress(id) { document.getElementById(id).style.display = 'none'; }
+function showProgress(id) { document.getElementById(id).classList.remove('hidden'); }
+function hideProgress(id) { document.getElementById(id).classList.add('hidden'); }
 
 function updateProgress(id, pct, msg) {
     document.getElementById(id + 'Fill').style.width = pct + '%';
@@ -1191,19 +671,39 @@ function updateProgress(id, pct, msg) {
 }
 
 function activateStep(n) {
-    document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
-    document.getElementById('step' + n).classList.add('active');
-    document.getElementById('step' + n).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('step1').classList.add('hidden-step');
+    document.getElementById('step2').classList.add('hidden-step');
+    document.getElementById('step3').classList.add('hidden-step');
+    
+    document.getElementById('step' + n).classList.remove('hidden-step');
+    
+    // Update header
+    var titles = ["Channel & Settings", "Video Selection", "Extraction Results"];
+    document.getElementById('mainTitle').textContent = titles[n-1];
+    document.getElementById('stepTrackerText').textContent = "Step " + n + " of 3";
+    
+    // Update Dots
+    for(var i=1; i<=3; i++) {
+        var dot = document.getElementById('dot' + i);
+        if (i === n) {
+            dot.className = "w-1.5 h-1.5 rounded-full bg-[#1A1A1A]";
+        } else if (i < n) {
+            dot.className = "w-1.5 h-1.5 rounded-full bg-[#1A1A1A]/30";
+        } else {
+            dot.className = "w-1.5 h-1.5 rounded-full border border-[#1A1A1A]";
+        }
+    }
 }
 
 function showAlert(msg, type) {
-    document.querySelectorAll('.main-content > .alert').forEach(function(a) { a.remove(); });
+    var container = document.getElementById('alertsContainer');
     var el = document.createElement('div');
-    el.className = 'alert alert-' + type;
-    el.textContent = msg;
-    var mc = document.querySelector('.main-content');
-    mc.insertBefore(el, mc.firstChild);
-    if (type !== 'error') setTimeout(function() { if (el.parentNode) el.remove(); }, 5000);
+    var border = type === 'error' ? 'border-[#1A1A1A] bg-white text-[#1A1A1A]' : 'border-[#1A1A1A]/20 bg-[#1A1A1A]/5 text-[#1A1A1A]';
+    el.className = 'px-4 py-3 rounded-xl border flex items-center gap-3 text-sm ' + border;
+    el.innerHTML = '<span class="font-mono text-[11px] uppercase tracking-wider opacity-70">' + type + '</span> <span>' + escapeHtml(msg) + '</span>';
+    
+    container.prepend(el);
+    setTimeout(function() { if (el.parentNode) el.remove(); }, type === 'error' ? 8000 : 4000);
 }
 
 function escapeHtml(t) {
@@ -1219,12 +719,12 @@ function sanitizeFilename(n) {
 function renderMarkdown(text) {
     return text
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^### (.+)$/gm, '<h3 class="font-semibold mt-4 mb-2">$1</h3>')
+        .replace(/^## (.+)$/gm, '<h3 class="font-semibold text-lg mt-5 mb-2">$1</h3>')
+        .replace(/^# (.+)$/gm, '<h2 class="font-semibold text-xl mt-6 mb-3">$1</h2>')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/^\- (.+)$/gm, '<li>$1</li>')
-        .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+        .replace(/^\- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+        .replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
         .replace(/\n\n/g, '<br><br>')
         .replace(/\n/g, '<br>');
 }
