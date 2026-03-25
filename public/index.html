@@ -494,7 +494,7 @@ function startExtractionStream(urls) {
         var apiKey = document.getElementById('geminiApiKey').value.trim();
         if (apiKey && d.succeeded > 0) document.getElementById('summarizeAllBtn').classList.remove('hidden');
 
-        if (d.failed > 0) {
+        if (d.failed > 0 && hasRetryableFailures()) {
             document.getElementById('retryFailedBtn').classList.remove('hidden');
         }
     });
@@ -510,10 +510,13 @@ function startExtractionStream(urls) {
 
 function retryFailed() {
     var failedUrls = extractedResults
-        .filter(function(r) { return !r.success; })
+        .filter(function(r) { return !r.success && r.retryable; })
         .map(function(r) { return 'https://www.youtube.com/watch?v=' + r.videoId; });
 
-    if (!failedUrls.length) return;
+    if (!failedUrls.length) {
+        showAlert('There are no retryable transcript failures right now.', 'info');
+        return;
+    }
 
     extractedResults = extractedResults.filter(function(r, idx) {
         if (!r.success) {
@@ -549,7 +552,7 @@ function appendResultCard(r, idx, apiKey) {
                 '<button class="text-[10px] font-semibold uppercase tracking-wider text-[#1A1A1A] hover:bg-[#1A1A1A]/10 px-3 py-1.5 rounded-full transition-colors" onclick="event.stopPropagation();downloadSingle(' + idx + ')">Save</button>' +
             '</div>';
     } else {
-        actions = '<span class="text-[11px] text-[#1A1A1A]/50 font-mono px-3">' + escapeHtml(r.error || 'Failed') + '</span>';
+        actions = '<span class="text-[11px] text-[#1A1A1A]/50 font-mono px-3">' + escapeHtml(formatTranscriptFailure(r)) + '</span>';
     }
     
     card.innerHTML =
@@ -704,6 +707,18 @@ function showAlert(msg, type) {
     
     container.prepend(el);
     setTimeout(function() { if (el.parentNode) el.remove(); }, type === 'error' ? 8000 : 4000);
+}
+
+function hasRetryableFailures() {
+    return extractedResults.some(function(r) {
+        return !r.success && !!r.retryable;
+    });
+}
+
+function formatTranscriptFailure(result) {
+    var code = result.code ? '[' + result.code.replace(/_/g, ' ') + '] ' : '';
+    var suffix = result.retryable ? ' Retry available.' : '';
+    return code + (result.error || 'Failed') + suffix;
 }
 
 function escapeHtml(t) {

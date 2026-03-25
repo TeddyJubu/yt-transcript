@@ -1,7 +1,13 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { analyzeChannel, fetchNextPage } from './channel';
-import { extractTranscript, extractTranscriptSafe, extractVideoId, getInnertubeApiKey, type TranscriptSafeResult } from './transcript';
+import {
+  createTranscriptFailureResult,
+  extractTranscriptSafe,
+  extractVideoId,
+  shouldBackOffTranscriptFailure,
+  type TranscriptSafeResult,
+} from './transcript';
 import { summarizeWithGemini } from './gemini';
 
 const app = new Hono();
@@ -43,6 +49,15 @@ class AdaptivePacer {
 
 app.use('/api/*', cors());
 
+app.onError((err, c) => {
+  console.error('Worker Error:', err);
+  return c.json({ 
+    error: err.message, 
+    stack: err.stack,
+    type: err.name 
+  }, 500);
+});
+
 app.post('/api/analyze_channel', async (c) => {
   const { channel_url, date_filter = 'all_time' } = await c.req.json();
   if (!channel_url) return c.json({ error: 'Channel URL is required' }, 400);
@@ -79,24 +94,14 @@ app.post('/api/extract_transcripts', async (c) => {
   const { video_urls = [] } = await c.req.json();
   if (!video_urls.length) return c.json({ error: 'No videos provided' }, 400);
 
-  let innertubeApiKey: string | null = null;
-  try {
-    innertubeApiKey = await getInnertubeApiKey();
-  } catch {
-  }
-
-  const results = [];
+  const results: TranscriptSafeResult[] = [];
   for (let i = 0; i < video_urls.length; i++) {
     const url = video_urls[i];
     const videoId = extractVideoId(url);
     if (!videoId) {
-      results.push({ videoId: url, success: false, error: 'Invalid URL' });
+      results.push(createTranscriptFailureResult(url, 'invalid_url', 'Invalid URL'));
     } else {
-      try {
-        results.push(await extractTranscript(videoId));
-      } catch (e: any) {
-        results.push({ videoId, success: false, error: e.message });
-      }
+      results.push(await extractTranscriptSafe(videoId));
     }
 
     if (i < video_urls.length - 1) await delay(EXTRACTION_DELAY_MS);
@@ -163,7 +168,7 @@ app.get('/api/extract_transcripts_stream', async (c) => {
 
         let result: TranscriptSafeResult;
         if (!videoId) {
-          result = { videoId: url, success: false, error: 'Invalid URL' };
+          result = createTranscriptFailureResult(url, 'invalid_url', 'Invalid URL');
           failed++;
         } else {
           result = await extractTranscriptSafe(videoId);
@@ -172,9 +177,7 @@ app.get('/api/extract_transcripts_stream', async (c) => {
             pacer.recordSuccess();
           } else {
             failed++;
-            // Detect rate limits or blocks to trigger pacer back-off
-            const err = result.error.toLowerCase();
-            if (err.includes('429') || err.includes('rate-limit') || err.includes('blocked') || err.includes('too many')) {
+            if (shouldBackOffTranscriptFailure(result)) {
               pacer.recordRateLimit();
             }
           }

@@ -71,10 +71,34 @@ export async function analyzeChannel(
   channelUrl: string,
   dateFilter: string,
 ): Promise<ChannelPage> {
+  // If user accidentally pastes a video URL, handle it gracefully
+  if (channelUrl.includes('watch?v=') || channelUrl.includes('youtu.be/')) {
+     const videoId = channelUrl.split('v=')[1]?.split('&')[0] || channelUrl.split('/').pop();
+     if (videoId) {
+       // Return a single video "page" result
+       return {
+         videos: [{
+           videoId,
+           title: 'Single Video',
+           url: channelUrl,
+           thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+           duration: 'N/A',
+           views: 'N/A',
+           publishedTimeText: 'Just now'
+         }],
+         hasMore: false,
+         dateFilter
+       };
+     }
+  }
+
   let videosUrl = channelUrl.replace(/\/+$/, '');
   if (!videosUrl.endsWith('/videos')) videosUrl += '/videos';
 
   const res = await fetch(videosUrl, { headers: YT_HEADERS });
+  if (res.status === 429) {
+    throw new Error('YouTube is rate-limiting this request (429). Cloudflare IPs are frequently blocked. Please try again in 30 seconds.');
+  }
   if (!res.ok) throw new Error(`YouTube returned HTTP ${res.status}`);
   const html = await res.text();
 
@@ -82,7 +106,7 @@ export async function analyzeChannel(
   if (!data) throw new Error('Could not extract channel data from page');
 
   const videos: Video[] = [];
-  collectVideos(data, videos, 500);
+  collectVideos(data, videos, 100);
 
   const filtered = videos.filter((v) => passesDateFilter(v.publishedTimeText, dateFilter));
   if (!filtered.length) throw new Error('No videos found for the selected date range');
@@ -114,9 +138,9 @@ export async function fetchNextPage(
   const continuationItems =
     data?.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems;
   if (Array.isArray(continuationItems)) {
-    for (const item of continuationItems) collectVideos(item, videos, 500);
+    for (const item of continuationItems) collectVideos(item, videos, 100);
   } else {
-    collectVideos(data, videos, 500);
+    collectVideos(data, videos, 100);
   }
 
   const filtered = videos.filter((v) => passesDateFilter(v.publishedTimeText, dateFilter));
