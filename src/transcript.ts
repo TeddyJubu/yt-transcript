@@ -1,4 +1,5 @@
 import { YT_HEADERS } from './youtube-utils';
+import { YtCaptionKit } from 'yt-caption-kit';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,16 +17,11 @@ export type TranscriptSafeResult =
   | (TranscriptResult & { success: true })
   | { videoId: string; success: false; error: string };
 
-// ─── Innertube constants ───────────────────────────────────────────────────────
+const _captionKitApi = new YtCaptionKit();
 
-const INNERTUBE_CONTEXT = {
-  client: {
-    clientName: 'WEB',
-    clientVersion: '2.20240101.00.00',
-    hl: 'en',
-    gl: 'US',
-  },
-};
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const ACCEPT_LANGUAGE_HEADER = 'en-US';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,45 +34,38 @@ export function extractVideoId(url: string): string | null {
   return m?.[1] ?? null;
 }
 
-/** Fetch the YouTube watch page and extract the innertube API key. */
-async function fetchInnertubeApiKey(videoId: string): Promise<{ apiKey: string; html: string }> {
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
-    headers: YT_HEADERS,
+/** Fetch the YouTube watch page and extract the player response JSON. */
+async function fetchWatchPageAndExtractPlayer(videoId: string): Promise<any> {
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const res = await fetch(url, {
+    headers: {
+      ...YT_HEADERS,
+      'Accept-Language': ACCEPT_LANGUAGE_HEADER,
+    },
   });
 
   if (!res.ok) throw new Error(`YouTube watch page returned HTTP ${res.status}`);
   const html = await res.text();
 
-  const match = html.match(/"INNERTUBE_API_KEY"\s*:\s*"([a-zA-Z0-9_-]+)"/);
-  if (!match?.[1]) {
-    if (html.includes('class="g-recaptcha"') || html.includes('"isBot":true')) {
-      throw new Error('IP blocked by YouTube (CAPTCHA detected)');
+  // The 'youtube-transcript-api' extraction approach: finding the embedded ytInitialPlayerResponse
+  const match1 = html.match(/ytInitialPlayerResponse\s*=\s*({.+?})\s*;\s*var meta\s*=/);
+  const match2 = html.match(/var ytInitialPlayerResponse\s*=\s*({.+?})\s*;\s*</);
+  const match3 = html.match(/ytInitialPlayerResponse\s*=\s*({.+?})\s*;\s*<\/script>/);
+  
+  const jsonStr = match1?.[1] || match2?.[1] || match3?.[1];
+
+  if (!jsonStr) {
+    if (html.includes('class="g-recaptcha"') || html.includes('"isBot":true') || html.includes('consent.youtube.com')) {
+      throw new Error('IP blocked by YouTube (CAPTCHA or Consent or Bot detected)');
     }
-    throw new Error('Could not extract INNERTUBE_API_KEY from YouTube page');
+    throw new Error('Could not extract ytInitialPlayerResponse from YouTube page');
   }
 
-  return { apiKey: match[1], html };
-}
-
-/** POST to the Innertube player endpoint and return the JSON response. */
-async function fetchInnertubePlayerData(videoId: string, apiKey: string): Promise<any> {
-  const url = `https://www.youtube.com/youtubei/v1/player?key=${apiKey}&prettyPrint=false`;
-  const body = {
-    context: INNERTUBE_CONTEXT,
-    videoId,
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      ...YT_HEADERS,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`Innertube player API returned HTTP ${res.status}`);
-  return res.json();
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    throw new Error('Failed to parse ytInitialPlayerResponse JSON');
+  }
 }
 
 interface CaptionTrack {
@@ -86,121 +75,54 @@ interface CaptionTrack {
   kind?: string;
 }
 
-/** Pick the best caption track for the requested language codes. */
-function selectTrack(tracks: CaptionTrack[], languages: string[]): CaptionTrack | null {
-  // Prefer manually-created transcripts first, then ASR
-  for (const lang of languages) {
-    const manual = tracks.find((t) => t.languageCode === lang && t.kind !== 'asr');
-    if (manual) return manual;
-  }
-  for (const lang of languages) {
-    const asr = tracks.find((t) => t.languageCode === lang && t.kind === 'asr');
-    if (asr) return asr;
-  }
-  // Fallback: any track
-  return tracks[0] ?? null;
-}
-
-/** Fetch and parse caption XML into timestamped lines. */
-async function fetchCaptionXml(baseUrl: string): Promise<string> {
-  const res = await fetch(baseUrl, { headers: YT_HEADERS });
-  if (!res.ok) throw new Error(`Caption fetch returned HTTP ${res.status}`);
-  const xml = await res.text();
-  return parseTranscriptXml(xml);
-}
-
-function parseTranscriptXml(xml: string): string {
-  const lines: string[] = [];
-  const regex = /<text\b([^>]*)>([\s\S]*?)<\/text>/g;
-  let m: RegExpExecArray | null;
-
-  while ((m = regex.exec(xml)) !== null) {
-    const attrsStr = m[1];
-    const raw = m[2];
-    if (!raw) continue;
-
-    // Parse start attribute
-    const startMatch = attrsStr.match(/\bstart="([^"]+)"/);
-    const start = startMatch ? parseFloat(startMatch[1]) : 0;
-
-    // Decode HTML entities and strip tags
-    const text = decodeEntities(stripTags(raw)).trim();
-    if (!text) continue;
-
-    const mm = String(Math.floor(start / 60)).padStart(2, '0');
-    const ss = String(Math.floor(start % 60)).padStart(2, '0');
-    lines.push(`[${mm}:${ss}] ${text}`);
-  }
-
-  return lines.join('\n');
-}
-
-function stripTags(s: string): string {
-  return s.replace(/<[^>]+>/g, '');
-}
-
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function extractTranscript(
   videoId: string,
   languages = ['en', 'en-US'],
 ): Promise<TranscriptResult> {
-  // 1. Get API key + raw HTML (for title)
-  const { apiKey, html: watchHtml } = await fetchInnertubeApiKey(videoId);
-
-  // 2. Fetch player data from Innertube
-  const playerData = await fetchInnertubePlayerData(videoId, apiKey);
-
-  // 3. Assert playability
-  const playability = playerData?.playabilityStatus;
-  const status = playability?.status;
-  if (status && status !== 'OK') {
-    const reason: string = playability?.reason ?? status;
-    if (reason.includes('not a bot') || reason.includes('sign in') || status === 'LOGIN_REQUIRED') {
-      throw new Error('YouTube bot-detection triggered — IP is blocked');
+  // 1. Fetch title from watch page HTML (fallback to videoId if blocked)
+  let title = videoId;
+  try {
+    const playerData = await fetchWatchPageAndExtractPlayer(videoId);
+    const playability = playerData?.playabilityStatus;
+    const status = playability?.status;
+    if (status && status !== 'OK') {
+      const reason: string = playability?.reason ?? status;
+      if (reason.includes('not a bot') || reason.includes('sign in') || status === 'LOGIN_REQUIRED') {
+         // Silently ignore here to let caption kit try or fail naturally
+      } else {
+         throw new Error(`Video unplayable: ${reason}`);
+      }
     }
-    throw new Error(`Video unplayable: ${reason}`);
+    title = playerData?.videoDetails?.title ?? videoId;
+  } catch(e) {
+    // If we fail to get the title, don't abort, try fetching captions anyway.
   }
 
-  // 4. Extract title
-  let title: string = playerData?.videoDetails?.title ?? videoId;
-
-  // 5. Extract caption tracks
-  const captionsData = playerData?.captions?.playerCaptionsTracklistRenderer;
-  const tracks: CaptionTrack[] = captionsData?.captionTracks ?? [];
-
-  if (!tracks.length) {
-    throw new Error('No captions/transcripts available for this video');
+  // 2. Fetch transcript via yt-caption-kit
+  const track = await _captionKitApi.fetch(videoId, { languages });
+  
+  if (!track || !track.snippets || !track.snippets.length) {
+      throw new Error('No suitable caption track found or empty text returned');
   }
 
-  // 6. Select best track
-  const track = selectTrack(tracks, languages);
-  if (!track) throw new Error('No suitable caption track found');
-
-  const isGenerated = track.kind === 'asr';
-  const language = track.languageCode;
-
-  // 7. Fetch and parse caption XML
-  const transcript = await fetchCaptionXml(track.baseUrl);
+  // 3. Format into [MM:SS] Text
+  const lines = track.snippets.map((snip: any) => {
+    const start = snip.start;
+    const mm = String(Math.floor(start / 60)).padStart(2, '0');
+    const ss = String(Math.floor(start % 60)).padStart(2, '0');
+    const text = snip.text.replace(/\n/g, ' ').trim();
+    return `[${mm}:${ss}] ${text}`;
+  });
 
   return {
     videoId,
     title,
-    transcript,
-    language,
-    isGenerated,
-    method: 'innertube-direct',
+    transcript: lines.join('\n'),
+    language: track.languageCode,
+    isGenerated: track.isGenerated,
+    method: 'yt-caption-kit',
     success: true,
   };
 }
