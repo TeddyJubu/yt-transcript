@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { analyzeChannel, fetchNextPage } from './channel';
-import { extractTranscript, extractTranscriptSafe, extractVideoId, getInnertubeApiKey } from './transcript';
+import { extractTranscript, extractTranscriptSafe, extractVideoId, getInnertubeApiKey, type TranscriptSafeResult } from './transcript';
 import { summarizeWithGemini } from './gemini';
 
 const app = new Hono();
@@ -93,7 +93,7 @@ app.post('/api/extract_transcripts', async (c) => {
       results.push({ videoId: url, success: false, error: 'Invalid URL' });
     } else {
       try {
-        results.push(await extractTranscript(videoId, innertubeApiKey));
+        results.push(await extractTranscript(videoId));
       } catch (e: any) {
         results.push({ videoId, success: false, error: e.message });
       }
@@ -142,9 +142,6 @@ app.get('/api/extract_transcripts_stream', async (c) => {
     videoId: extractVideoId(url),
   }));
 
-  let innertubeApiKey: string | null = null;
-  try { innertubeApiKey = await getInnertubeApiKey(); } catch { /* best-effort */ }
-
   const pacer = new AdaptivePacer();
   const encoder = new TextEncoder();
   const total = items.length;
@@ -164,19 +161,20 @@ app.get('/api/extract_transcripts_stream', async (c) => {
         // Emit progress before starting this video
         controller.enqueue(sseEvent('progress', { current: i + 1, total, videoId: videoId ?? url }));
 
-        let result;
+        let result: TranscriptSafeResult;
         if (!videoId) {
           result = { videoId: url, success: false, error: 'Invalid URL' };
           failed++;
         } else {
-          result = await extractTranscriptSafe(videoId, innertubeApiKey);
+          result = await extractTranscriptSafe(videoId);
           if (result.success) {
             succeeded++;
             pacer.recordSuccess();
           } else {
             failed++;
-            // Detect 429 in the error message to trigger back-off
-            if (result.error.includes('429') || result.error.toLowerCase().includes('rate-limit')) {
+            // Detect rate limits or blocks to trigger pacer back-off
+            const err = result.error.toLowerCase();
+            if (err.includes('429') || err.includes('rate-limit') || err.includes('blocked') || err.includes('too many')) {
               pacer.recordRateLimit();
             }
           }
